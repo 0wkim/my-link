@@ -15,12 +15,12 @@ export default function Home() {
 
         {/* 역할 / 신분 태그 */}
         <span className="inline-block px-3 py-1 mb-4 text-xs font-medium rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400">
-          대학생 · Vibe Coding
+          Frontend Developer
         </span>
 
         {/* 소개글 */}
-        <p className="text-zinc-600 dark:text-zinc-400 text-sm leading-relaxed mb-6 max-w-xs">
-          안녕하세요! 바이브 코딩을 배우고 있는 대학생입니다.
+        <p className="text-zinc-600 dark:text-zinc-400 text-sm leading-relaxed mb-6 max-w-xs break-keep">
+          사용자 경험을 고민하며 더 나은 가치를 만드는 개발자입니다. 복잡한 문제를 직관적이고 깔끔한 코드로 해결하는 것을 즐깁니다.
         </p>
 
         {/* 간단한 링크 / 버튼 섹션 */}
