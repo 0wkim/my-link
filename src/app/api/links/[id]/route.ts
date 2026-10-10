@@ -6,7 +6,7 @@ import type {
   ApiResponse,
 } from "@/types/link";
 
-let mockLinks: LinkItem[] = [...(linksDataRaw as LinkItem[])];
+const mockLinks: LinkItem[] = [...(linksDataRaw as LinkItem[])];
 
 interface RouteContext {
   params: Promise<{ id: string }>;

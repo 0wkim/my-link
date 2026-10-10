@@ -9,7 +9,7 @@ import type {
 } from "@/types/link";
 
 // 메모리 상의 Mock 데이터 저장소 (서버 라이프사이클 동안 변경 반영 시뮬레이션 가능)
-let mockLinks: LinkItem[] = [...(linksDataRaw as LinkItem[])];
+const mockLinks: LinkItem[] = [...(linksDataRaw as LinkItem[])];
 
 /**
  * GET /api/links
@@ -36,7 +36,7 @@ export async function GET(request: Request) {
     const limit = Math.max(1, parseInt(searchParams.get("limit") || "10", 10));
 
     // 1. 필터링
-    let filtered = mockLinks.filter((item) => {
+    const filtered = mockLinks.filter((item) => {
       // 핸들 필터
       if (item.userHandle && item.userHandle !== handle) return false;
 
