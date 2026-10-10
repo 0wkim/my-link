@@ -1,9 +1,9 @@
 # [PRD] 마이링크 (MyLink) 제품 기능 정의서 (LocalStorage & Mock 데이터 기반)
 
-> **문서 버전**: v1.3.0 (shadcn/ui 기반 토스 디자인 시스템(TDS) 통합 마일스톤)  
+> **문서 버전**: v1.4.0 (링크 목록 더미 데이터 및 백엔드 Mock REST API 연동 마일스톤)  
 > **최종 수정 일자**: 2026-10-10  
 > **상태**: 승인됨 (Approved)  
-> **아키텍처**: 서버리스 클라이언트 사이드 (Local-First Architecture, Zustand & LocalStorage Mock 연동)  
+> **아키텍처**: 서버리스 클라이언트 사이드 (Local-First Architecture, Zustand & LocalStorage Mock 연동) + Next.js App Router Mock REST API  
 > **기본 기술 스택**: Next.js 16 (App Router, Turbopack), React 19, TypeScript, Tailwind CSS v4, shadcn/ui (TDS 커스텀 디자인 시스템), Zustand
 
 ---
@@ -164,63 +164,136 @@
 
 ---
 
-## 5. 로컬 데이터 모델 (LocalStorage Schema)
+## 5. 데이터 모델 및 Mock 데이터 시스템 (Data Architecture)
 
-브라우저 `localStorage`에 저장되는 단일 또는 키 기반 데이터 모델:
+### 5.1 데이터 모델 및 스키마 (TypeScript Types)
+`src/types/link.ts`에 정의된 핵심 데이터 모델:
 
 ```typescript
-// 1. 세션 키: "mylink_session"
-interface UserSession {
-  userId: string;
-  email: string;
-  name: string;
-  handle: string; // 현재 관리 중인 핸들 (예: "hong")
-  provider: "google" | "kakao" | "demo";
+// 1. 링크 아이템 인터페이스 (LinkItem)
+interface LinkItem {
+  id: string; // 고유 식별자 (예: "link-01")
+  userHandle: string; // 소유자 핸들 (예: "hong")
+  title: string; // 링크 제목
+  subtitle?: string; // 보조 설명 문구
+  url: string; // 목적지 URL
+  category: "portfolio" | "blog" | "social" | "career" | "contact" | "store" | "community" | "etc";
+  iconType: "globe" | "github" | "blog" | "mail" | "coffee" | "file-text" | "instagram" | "youtube" | "twitter" | "linkedin" | "discord" | "store" | "sparkles" | "link";
+  iconBg?: string; // 아이콘 배경 HEX (예: "#E8F3FF")
+  iconColor?: string; // 아이콘 전경 HEX (예: "#3182F6")
+  badge?: string; // 강조 배지 텍스트 (예: "대표 링크", "1.5k Stars")
+  isActive: boolean; // 노출 여부
+  isPinned?: boolean; // 상단 고정 강조 여부
+  displayOrder: number; // 노출 순서 번호
+  clickCount: number; // 누적 클릭수 (통계)
+  createdAt: string; // 생성 일시 (ISO 8601)
+  updatedAt: string; // 수정 일시 (ISO 8601)
 }
 
-// 2. 프로필 및 링크 저장소 키: "mylink_profiles"
+// 2. 프로필 및 테마 모델
+interface UserProfile {
+  handle: string;
+  displayName: string;
+  bio: string;
+  avatarUrl: string;
+  role: string;
+  location?: string;
+  email?: string;
+  viewsCount: number;
+  socials?: Record<string, string>;
+}
+
+interface ProfileTheme {
+  presetId: "toss" | "minimal" | "dark" | "vivid";
+  backgroundColor?: string;
+  buttonShape: "square" | "rounded" | "pill";
+  buttonStyle: "fill" | "outline";
+}
+
+// 3. PRD 영속 데이터베이스 스키마: "mylink_profiles"
 interface LocalDatabase {
   [handle: string]: {
-    profile: {
-      handle: string;
-      displayName: string;
-      bio: string;
-      avatarUrl: string; // URL 또는 Base64 DataURL
-      viewsCount: number;
-    };
-    theme: {
-      presetId: "toss" | "minimal" | "dark" | "vivid";
-      backgroundColor?: string;
-      buttonShape: "square" | "rounded" | "pill";
-      buttonStyle: "fill" | "outline";
-    };
-    links: Array<{
-      id: string;
-      title: string;
-      url: string;
-      iconType?: string;
-      isActive: boolean;
-      displayOrder: number;
-      clickCount: number;
-      createdAt: string;
-    }>;
+    profile: UserProfile;
+    theme: ProfileTheme;
+    links: LinkItem[];
   };
 }
 ```
 
-### 초기 내장 Mock 데이터 (Seed Data)
-앱 최초 실행 시 `localStorage`에 데이터가 없을 경우 자동으로 주입되는 기본 데이터:
-- **핸들**: `@hong`
-- **표시 이름**: `홍길동`
-- **한 줄 소개**: `복잡한 문제를 단순하고 직관적인 화면으로 해결하는 프론트엔드 엔지니어예요.`
-- **기본 링크 4개**:
-  1. 포트폴리오 웹사이트 (`https://example.com/portfolio`)
-  2. 기술 블로그 (`https://example.com/blog`)
-  3. GitHub 저장소 (`https://github.com`)
-  4. 커피챗 신청 (`mailto:hong@example.com`)
-- **기본 테마**: `toss` (토스 스타일)
+---
 
-### 5.2 Zustand 전역 상태 스토어 설계 (Store Architecture)
+### 5.2 내장 더미 데이터 (Seed & Mock Datasets)
+프로젝트 내에서 클라이언트 로컬 스토리지 시드 및 Mock API로 바로 활용할 수 있는 더미 데이터셋이 구축되어 있습니다:
+
+1. **정적 링크 목록 JSON (`src/data/links.json`)**
+   - 개발자 페르소나(`@hong`)의 12종 고품질 링크 목록 수록:
+     - 2026 포트폴리오 웹사이트 (`portfolio`, `globe`, 대표 링크)
+     - 기술 블로그 (`blog`, `blog`, 매주 연재)
+     - GitHub 오픈소스 저장소 (`community`, `github`, 1.5k Stars)
+     - 이력서 및 경력기술서 (`career`, `file-text`, PDF)
+     - 1:1 커피챗 신청하기 (`contact`, `coffee`, 30분 무료)
+     - 비즈니스 및 외주 협업 문의 (`contact`, `mail`, 빠른 회신)
+     - YouTube 코딩 채널 (`social`, `youtube`, 구독자 8.5k)
+     - LinkedIn 프로필 (`career`, `linkedin`, 1촌 환영)
+     - 디스코드 프론트엔드 스터디 (`community`, `discord`, 350+ 멤버)
+     - 토스 디자인 시스템 발표 자료 (`blog`, `sparkles`, 슬라이드)
+     - X(트위터) 테크 단상 (`social`, `twitter`, 팔로우)
+     - 카카오톡 오픈채팅 (`contact`, `link`, 비활성화 예시)
+2. **공개 직접 접근용 JSON (`public/mock/links.json`)**
+   - 브라우저나 외부 도구에서 `GET /mock/links.json`으로 바로 fetch 가능
+3. **통합 멀티 프로필 DB 시드 (`src/data/mock-database.json`)**
+   - `@hong` (프론트엔드 엔지니어) + `@sujin` (일러스트레이터 겸 테크 크리에이터) 멀티 계정 프로필, 테마, 링크 일괄 수록
+
+---
+
+### 5.3 백엔드 Mock REST API 엔드포인트 명세
+Next.js 16 App Router Route Handler 기반으로 프론트엔드 연동 테스트용 Mock REST API를 제공합니다:
+
+| 메서드 | 엔드포인트 | 설명 및 파라미터 |
+| :--- | :--- | :--- |
+| `GET` | `/api/links` | 링크 목록 조회 (`handle`, `category`, `isActive`, `search`, `sortBy`, `page`, `limit`) |
+| `POST` | `/api/links` | 새 링크 등록 (입력값 유효성 검사 및 자동 ID/타임스탬프 부여) |
+| `GET` | `/api/links/:id` | 특정 링크 단건 상세 조회 |
+| `PATCH` | `/api/links/:id` | 특정 링크 정보 수정 |
+| `DELETE` | `/api/links/:id` | 특정 링크 삭제 |
+| `POST` | `/api/links/:id/click` | 링크 클릭수 1 증가 트래킹 |
+| `GET` | `/api/profile` | 기본 사용자(@hong)의 프로필, 테마, 링크 일괄 조회 |
+| `GET` | `/api/profile/:handle` | 특정 핸들(@sujin 등)의 프로필, 테마, 링크 일괄 조회 |
+
+#### 공통 응답 규격 (`ApiResponse<T>` / `PaginatedApiResponse<T>`)
+```json
+{
+  "success": true,
+  "statusCode": 200,
+  "message": "링크 목록을 성공적으로 조회했습니다.",
+  "data": [...],
+  "pagination": {
+    "total": 12,
+    "page": 1,
+    "limit": 10,
+    "totalPages": 2,
+    "hasNextPage": true,
+    "hasPrevPage": false
+  },
+  "timestamp": "2026-10-10T21:28:00.000Z"
+}
+```
+
+---
+
+### 5.4 클라이언트 Mock API 서비스 연동 (`src/lib/mock-api.ts`)
+프론트엔드 컴포넌트에서 백엔드 API를 손쉽게 호출할 수 있는 유틸리티 함수를 제공하며, 오프라인 환경에서도 로컬 데이터로 안전하게 폴백(Fallback) 처리됩니다:
+- `getLinks(params)`: 링크 목록 필터/검색/페이징 조회
+- `getLinkById(id)`: 링크 단건 조회
+- `createLink(input)`: 새 링크 생성
+- `updateLink(id, input)`: 링크 수정
+- `deleteLink(id)`: 링크 삭제
+- `trackLinkClick(id)`: 링크 클릭수 집계
+- `getProfileWithLinks(handle)`: 프로필 + 활성 링크 통합 조회
+
+---
+
+### 5.5 Zustand 전역 상태 스토어 설계 (Store Architecture)
 - **`useSessionStore` (`mylink_session`)**:
   - `session`: 로그인한 사용자 정보 (`UserSession | null`)
   - `login(provider, handle)`: 시뮬레이션 로그인 및 세션 생성
