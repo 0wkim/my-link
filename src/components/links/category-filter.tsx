@@ -5,7 +5,7 @@ import type { LinkCategory } from "@/types/link";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
-import { IconSearch, IconClose } from "@/components/icons";
+import { IconSearch, IconClose, IconPlus } from "@/components/icons";
 
 export const CATEGORY_LABELS: Record<LinkCategory | "all", string> = {
   all: "전체",
@@ -28,6 +28,7 @@ interface CategoryFilterProps {
   availableCategories: LinkCategory[];
   categoryCounts: Record<string, number>;
   onResetFilters: () => void;
+  onOpenAddLink?: () => void;
 }
 
 export function CategoryFilter({
@@ -39,6 +40,7 @@ export function CategoryFilter({
   availableCategories,
   categoryCounts,
   onResetFilters,
+  onOpenAddLink,
 }: CategoryFilterProps) {
   const isFiltered = searchQuery.trim() !== "" || selectedCategory !== "all";
 
@@ -55,18 +57,31 @@ export function CategoryFilter({
           </span>
         </div>
 
-        {/* 필터 초기화 버튼 */}
-        {isFiltered && (
-          <Button
-            variant="ghost"
-            size="s"
-            onClick={onResetFilters}
-            className="text-[12px] h-7 px-2 text-[#6B7684] hover:text-[#191F28] gap-1"
-          >
-            <span>필터 초기화</span>
-            <IconClose className="w-3.5 h-3.5" />
-          </Button>
-        )}
+        {/* 필터 초기화 & 링크 추가 액션 */}
+        <div className="flex items-center gap-1.5">
+          {isFiltered && (
+            <Button
+              variant="ghost"
+              size="s"
+              onClick={onResetFilters}
+              className="text-[12px] h-7 px-2 text-[#6B7684] hover:text-[#191F28] gap-1 cursor-pointer"
+            >
+              <span>필터 초기화</span>
+              <IconClose className="w-3.5 h-3.5" />
+            </Button>
+          )}
+          {onOpenAddLink && (
+            <Button
+              variant="secondary"
+              size="s"
+              onClick={onOpenAddLink}
+              className="text-[12px] h-7 px-2.5 text-[#3182F6] hover:bg-[#E8F3FF] gap-1 cursor-pointer font-bold rounded-full"
+            >
+              <IconPlus className="w-3.5 h-3.5 text-[#3182F6]" />
+              <span>링크 추가</span>
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* 검색 입력창 (shadcn Input 기반, TDS text-field 규격 48px / r12) */}

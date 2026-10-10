@@ -3,11 +3,12 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useProfileStore } from "@/store/profile-store";
-import type { LinkItem, LinkCategory } from "@/types/link";
+import type { LinkItem, LinkCategory, LinkCreateInput } from "@/types/link";
 import { ProfileActions } from "@/components/profile/profile-actions";
 import { ProfileHeader } from "@/components/profile/profile-header";
 import { CategoryFilter } from "@/components/links/category-filter";
 import { LinkList } from "@/components/links/link-list";
+import { AddLinkDialog } from "@/components/links/add-link-dialog";
 import { IntroDialog } from "@/components/profile/intro-dialog";
 import { IconCheck } from "@/components/icons";
 
@@ -23,6 +24,7 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
   const profiles = useProfileStore((s) => s.profiles);
   const currentHandle = useProfileStore((s) => s.currentHandle);
   const setCurrentHandle = useProfileStore((s) => s.setCurrentHandle);
+  const addLink = useProfileStore((s) => s.addLink);
   const trackClick = useProfileStore((s) => s.trackClick);
   const trackView = useProfileStore((s) => s.trackView);
   const resetToMockData = useProfileStore((s) => s.resetToMockData);
@@ -42,6 +44,21 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
   const [selectedCategory, setSelectedCategory] = useState<LinkCategory | "all">("all");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isIntroModalOpen, setIsIntroModalOpen] = useState(false);
+  const [isAddLinkModalOpen, setIsAddLinkModalOpen] = useState(false);
+
+  // 새 링크 추가 핸들러 (로컬 상태 및 LocalStorage 즉각 반영)
+  const handleAddLink = (input: LinkCreateInput) => {
+    const newLink = addLink(activeHandle, input);
+    // 검색어나 카테고리 필터가 걸려 있으면 방금 추가한 링크가 안 보일 수 있으므로 초기화
+    if (
+      searchQuery.trim() ||
+      (selectedCategory !== "all" && selectedCategory !== input.category)
+    ) {
+      setSearchQuery("");
+      setSelectedCategory("all");
+    }
+    showToast(`'${newLink.title}' 링크를 추가했어요`);
+  };
 
   // 활성 엔트리 (오버라이드 -> props -> 스토어 -> 기본값)
   const activeHandle = overrideHandle || normalizedInitial || currentHandle || "hong";
@@ -192,6 +209,7 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
         onSwitchHandle={handleSwitchHandle}
         onResetData={handleResetData}
         onShare={handleShare}
+        onOpenAddLink={() => setIsAddLinkModalOpen(true)}
       />
 
       {/* 3. 메인 콘텐츠 뷰포트 (최대 576px 모바일 최적화 규격) */}
@@ -212,6 +230,7 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
             setSearchQuery("");
             setSelectedCategory("all");
           }}
+          onOpenAddLink={() => setIsAddLinkModalOpen(true)}
         />
 
         {/* [D] 링크 카드 리스트 스택 */}
@@ -222,6 +241,7 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
             setSearchQuery("");
             setSelectedCategory("all");
           }}
+          onOpenAddLink={() => setIsAddLinkModalOpen(true)}
         />
 
         {/* [E] 하단 푸터 (깔끔한 저작권 정보) */}
@@ -233,7 +253,15 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
         </footer>
       </main>
 
-      {/* 4. 소개 및 안내 모달 다이얼로그 (shadcn Dialog 기반) */}
+      {/* 4. 새 링크 추가 모달 다이얼로그 (shadcn Dialog 기반) */}
+      <AddLinkDialog
+        open={isAddLinkModalOpen}
+        onOpenChange={setIsAddLinkModalOpen}
+        onAddLink={handleAddLink}
+        existingLinks={links}
+      />
+
+      {/* 5. 소개 및 안내 모달 다이얼로그 (shadcn Dialog 기반) */}
       <IntroDialog open={isIntroModalOpen} onOpenChange={setIsIntroModalOpen} />
     </div>
   );

@@ -3,13 +3,14 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { IconShare, IconRefresh } from "@/components/icons";
+import { IconShare, IconRefresh, IconPlus } from "@/components/icons";
 
 interface ProfileActionsProps {
   activeHandle: string;
   onSwitchHandle: (handle: string) => void;
   onResetData: () => void;
   onShare: () => void;
+  onOpenAddLink?: () => void;
 }
 
 export function ProfileActions({
@@ -17,6 +18,7 @@ export function ProfileActions({
   onSwitchHandle,
   onResetData,
   onShare,
+  onOpenAddLink,
 }: ProfileActionsProps) {
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-[#E5E8EB]">
@@ -38,8 +40,22 @@ export function ProfileActions({
           </Badge>
         </div>
 
-        {/* 우측 조작 액션 (핸들 전환, 초기화, 공유) */}
+        {/* 우측 조작 액션 (링크 추가, 핸들 전환, 초기화, 공유) */}
         <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+          {/* 새 링크 추가 버튼 */}
+          {onOpenAddLink && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={onOpenAddLink}
+              title="새 링크 추가하기"
+              className="h-8 px-2.5 sm:px-3 text-[12px] sm:text-[13px] font-bold rounded-full gap-1 cursor-pointer shadow-2xs"
+            >
+              <IconPlus className="w-3.5 h-3.5 text-white" />
+              <span>새 링크</span>
+            </Button>
+          )}
+
           {/* 멀티 프로필 계정 전환기 (@hong / @sujin) */}
           <div className="flex items-center bg-[#F2F4F6] rounded-full p-0.5 text-[11px] sm:text-[12px] font-semibold border border-[#E5E8EB]/70">
             <button
