@@ -1,10 +1,10 @@
 # [PRD] 마이링크 (MyLink) 제품 기능 정의서 (LocalStorage & Mock 데이터 기반)
 
-> **문서 버전**: v1.2.0 (Phase 1: LocalStorage 프로필 페이지 중심 마일스톤 분리)  
-> **최종 수정 일자**: 2026-10-09  
+> **문서 버전**: v1.3.0 (shadcn/ui 기반 토스 디자인 시스템(TDS) 통합 마일스톤)  
+> **최종 수정 일자**: 2026-10-10  
 > **상태**: 승인됨 (Approved)  
 > **아키텍처**: 서버리스 클라이언트 사이드 (Local-First Architecture, Zustand & LocalStorage Mock 연동)  
-> **기본 기술 스택**: Next.js 16 (App Router, Turbopack), React 19, TypeScript, Tailwind CSS v4, Zustand
+> **기본 기술 스택**: Next.js 16 (App Router, Turbopack), React 19, TypeScript, Tailwind CSS v4, shadcn/ui (TDS 커스텀 디자인 시스템), Zustand
 
 ---
 
@@ -33,7 +33,7 @@
 ### 1.3 핵심 가치 제안 (Value Proposition)
 1. **Zero-Config 즉시 실행**: DB나 API 서버 설정 없이 `npm run dev`만으로 브라우저에서 즉시 동작
 2. **영속적 로컬 스토리지 (LocalStorage)**: 브라우저를 새로고침하거나 재방문해도 로컬에 저장된 프로필, 링크, 테마가 그대로 유지
-3. **토스 디자인 시스템 (TDS) 기반 완성도**: 모바일 및 데스크톱 전 구간에서 깨짐 없는 깔끔하고 직관적인 UX
+3. **shadcn/ui 기반 토스 디자인 시스템 (TDS) 완성도**: headless 접근성이 보장된 최신 shadcn/ui 컴포넌트를 기반으로, `docs/design.md`의 토스 디자인 시스템(TDS) 비주얼 토큰(Toss Blue, 8단 그레이스케일, 공격적 라운드 래더, 모바일 최적화 터치 타겟)을 100% 결합하여 모바일 및 데스크톱 전 구간에서 완성도 높은 사용자 경험 제공
 4. **Mock 기반 멀티 핸들 지원**: 기본 샘플 계정(`@hong`) 제공 및 로컬 스토리지 키 기반 데이터 조회
 
 ### 1.4 핵심 사용자 시나리오 및 페르소나 (User Personas & Scenarios)
@@ -91,7 +91,8 @@
 | **프레임워크** | **Next.js 16 (App Router)** | 클라이언트 컴포넌트 기반 상태 관리 및 dynamic route(`/@:username`) |
 | **라이브러리** | **React 19** | `useTransition`, `useState`, Context API를 활용한 반응형 상태 동기화 |
 | **언어** | **TypeScript 5.8+** | 데이터 스키마 타입 안전성 보장 (`Profile`, `LinkItem`, `ThemeConfig` 등) |
-| **스타일링** | **Tailwind CSS v4** | 모바일 퍼스트 반응형 레이아웃 및 테마별 유틸리티 스타일링 |
+| **UI 컴포넌트 시스템** | **shadcn/ui (최신 v4+)** | headless 접근성 프리미티브(`@base-ui/react`, Radix, Lucide React) 위에 `docs/design.md`의 토스 디자인 시스템(TDS) 스타일(토스 블루, 8단 그레이, 공격적 라운드 래더, 모바일 최적화 규격)을 100% 매핑하여 구축 (`src/components/ui/*`) |
+| **스타일링** | **Tailwind CSS v4** | 모바일 퍼스트 반응형 레이아웃 및 `@theme inline` 기반 TDS 디자인 토큰과 shadcn CSS 변수 통합 |
 | **전역 상태 관리** | **Zustand (`persist` 미들웨어)** | 컴포넌트 렌더링 최적화(Selector 구독), 실시간 프리뷰 0ms 무지연 동기화, `localStorage` 자동 영속화 |
 | **데이터 저장소** | **브라우저 `LocalStorage`** | JSON 직렬화를 통한 영속 데이터 저장 및 Mock Repository 패턴 적용 |
 | **인증 (Auth)** | **Mock Auth Provider** | 구글/카카오 원클릭 시뮬레이션 로그인 및 로컬 세션 유지 (`sessionStorage` / `localStorage`) |
@@ -137,8 +138,9 @@
   - 각 링크의 제목, 도메인/보조 텍스트, 아이콘(웹, 깃허브, 블로그 등) 표시
   - 클릭 시 새 탭(`target="_blank" rel="noopener noreferrer"`)으로 안전하게 목적지 URL 오픈
   - 호버 및 탭 시 부드러운 인터랙션 (스케일 및 배경색 피드백)
-- **FR-1.4 토스 TDS 스타일 및 반응형 최적화**
-  - 토스 디자인 시스템(TDS) 가이드라인(그레이스케일, 토스 블루 포인트, 카드 라운딩) 적용
+- **FR-1.4 shadcn/ui 기반 토스 TDS 디자인 시스템 및 반응형 최적화**
+  - 모든 기본 컴포넌트(버튼, 카드, 아바타, 다이얼로그 등)는 `src/components/ui/`의 shadcn/ui 원자를 바탕으로 구성
+  - `docs/design.md`에 정의된 토스 디자인 시스템(TDS) 가이드라인(그레이스케일, 단일 토스 블루 `#3182f6`, 12~16px 라운딩, 44px+ 터치 타겟)을 shadcn/ui 컴포넌트 테마 및 CVA 변형에 100% 매핑
   - 모바일(320px~480px)부터 데스크톱(1024px+)까지 중앙 정렬된 모바일 최적화 뷰포트 유지
 - **FR-1.5 프로필 공유 기능**
   - 우측 상단 공유 아이콘 클릭 시 현재 프로필 URL 클립보드 복사 및 토스트 알림 안내 (모바일의 경우 Web Share API 지원)

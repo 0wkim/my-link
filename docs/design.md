@@ -2,9 +2,10 @@
 name: 토스
 slug: toss
 category: finance
-last_updated: "2026-09-24"
+last_updated: "2026-10-10"
 created_at: "2026-05-11"
 lang: ko
+ui_library: "shadcn/ui (v4+)"
 logo: https://getdesign.kr/logos/toss.png
 colors:
   fill-brand: "{colors.blue-500}"
@@ -620,6 +621,41 @@ result는 성공/실패 종료 화면 — 중앙 정렬된 시맨틱 원형 아�
 | 05 · 완료 | `DoneScreen` | "확인" → `home`(stack reset) |
 
 흐름 전체가 단일 React `useState` 스택으로 관리되어 back-navigation이 평탄하게 동작하며, `AmountScreen`은 입력값 0일 때 CTA를 disabled로 잠가 토스의 **"버튼은 일어날 일을 직접 말한다"** 원칙( Don'ts 절)을 잡음 없이 구현한다.
+
+## shadcn/ui 기반 토스 디자인 시스템 (TDS) 구축 및 아키텍처 가이드 (shadcn/ui × TDS Architecture)
+
+본 프로젝트는 접근성과 확장성이 검증된 **shadcn/ui(v4+, `@base-ui/react` 및 Radix Primitives)** 컴포넌트 생태계를 기반으로, 토스 디자인 시스템(TDS)의 시각 언어(디자인 토큰, 인터랙션, 레이아웃 규격)를 완전하게 매핑하여 디자인 시스템을 구축합니다.
+
+### 1. 3계층 아키텍처 구조 (3-Tier Architecture)
+
+1. **Primitive / Headless Layer (`@base-ui/react`, Radix)**
+   - WAI-ARIA 접근성, 키보드 인터랙션(Tab, Enter, Space, Escape), 포커스 트랩 및 스크린 리더 표준 자동 보장
+2. **Token & Styling Layer (`src/app/globals.css`, Tailwind CSS v4 `@theme inline`)**
+   - TDS 컬러 토큰(`--tds-blue-500`, `--tds-grey-900` 등)과 shadcn 테마 변수(`--primary`, `--background`, `--radius` 등)의 1:1 결합
+   - Toss Elevation(`tds-shadow-1`, `tds-shadow-2`), Pressed Overlay(`tds-press`), Tabular 숫자 설정
+3. **Component & Variant Layer (`src/components/ui/*`, CVA & `cn`)**
+   - `class-variance-authority` (CVA)를 통한 TDS variant (`primary`, `secondary`, `danger`, `ghost`) 및 사이즈 (`xl: 56px`, `l: 48px`, `m: 40px`, `s: 32px`) 표준화
+   - `export { cn } from "@/lib/utils"`를 통한 최적화된 클래스 합성
+
+### 2. shadcn/ui 컴포넌트 ↔ TDS 매핑 표준
+
+| TDS 컴포넌트 명세 | shadcn/ui 기반 파일 위치 | TDS 스타일 매핑 규칙 |
+| :--- | :--- | :--- |
+| **Button (`TButton`)** | `src/components/ui/button.tsx` | - **variant**:<br>• `primary`: `bg-[#3182f6] text-white hover:bg-[#1b64da]` (화면당 1개만 허용)<br>• `secondary`: `bg-[#f2f4f6] text-[#191f28] hover:bg-[#e5e8eb]`<br>• `danger`: `bg-[#f04452] text-white hover:bg-[#d93844]`<br>• `ghost`: `bg-transparent text-[#3182f6] hover:bg-[#e8f3ff]`<br>- **size**:<br>• `xl`: 56px 높이, `rounded-[16px]`, 17px Bold<br>• `l`: 48px 높이, `rounded-[14px]`, 17px Bold<br>• `m`: 40px 높이, `rounded-[12px]`, 15px Semibold<br>• `s`: 32px 높이, `rounded-[10px]`, 13px Semibold |
+| **BottomCTA** | `src/components/ui/bottom-cta.tsx` 또는 `button.tsx` | - 화면 최하단 고정 56pt 액션 버튼<br>- 상단 24~32px `white → transparent` 보호 그라디언트 적용<br>- `pb-[env(safe-area-inset-bottom)]` 안전 영역 자동 인식 |
+| **TextField / Input** | `src/components/ui/input.tsx` | - 48px 높이, `rounded-[12px]`<br>- Resting: `bg-[#f2f4f6]` (grey-100), `border border-[#e5e8eb]`<br>- Focus: `bg-white`, `border-[1.5px] border-[#3182f6]`<br>- Error: `border-[1.5px] border-[#f04452]` + 하단 에러 헬퍼 텍스트 |
+| **Card (링크 블록)** | `src/components/ui/card.tsx` | - `bg-white`, `border border-[#e5e8eb]`, `rounded-[16px]`<br>- Toss Shadow: `tds-shadow-1` (기본) → `tds-shadow-2` (호버)<br>- Active: `active:scale-[0.98]` 및 부드러운 스케일 트랜지션 |
+| **Avatar** | `src/components/ui/avatar.tsx` | - 80px (프로필 대표 아바타) / 44px (리스트 로우)<br>- 완전 원형(`rounded-full`) 또는 `rounded-[14px]` |
+| **Badge / Chip** | `src/components/ui/badge.tsx` | - **Badge**: 22px 높이, `rounded-[6px]`, 톤다운 배경(washed tint)<br>- **Chip**: 34px 높이, `rounded-full`, 1px border, 탭 시 토글 |
+| **Toast** | `src/components/ui/toast.tsx` | - `bg-[#191f28]` (grey-900), `text-white`, `rounded-[14px]`<br>- `tds-shadow-toast`, 초록 체크 아이콘(`text-[#059669]`) 페어링 |
+| **Dialog / BottomSheet** | `src/components/ui/dialog.tsx` | - 모바일 환경: 하단에서 슬라이드 업되는 `BottomSheet` 스타일로 반응형 전환<br>- 상단 드래그 핸들 바, `rounded-t-[24px]` |
+
+### 3. 컴포넌트 개발 시 TDS 규율 준수 체크리스트
+
+1. **단일 강조색 (Single Accent Color)**: 화면에 여러 버튼이 있어도 Toss Blue(`#3182f6`) Primary CTA는 반드시 단 하나만 존재해야 합니다.
+2. **버튼 크기와 라운드 페어링**: 사이즈별 라운드 토큰(`xl`→16px, `l`→14px, `m`→12px, `s`→10px)을 반드시 준수합니다.
+3. **피드백 인터랙션**: 클릭/터치 시 `tds-press` (검정 4%~26% tint) 또는 `active:scale-[0.98]`를 적용하고, 비활성화 시에는 컴포넌트 전체에 30% 투명도(`opacity-30 pointer-events-none`)를 부여합니다.
+4. **한글 텍스트 & 카피라이팅**: 버튼 라운드 텍스트는 명확한 동작 중심의 **해요체**를 사용하며, 숫자는 `tabular-nums`를 적용합니다.
 
 ## Do's and Don'ts
 
