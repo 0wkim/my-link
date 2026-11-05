@@ -7,6 +7,7 @@ import type {
   ApiResponse,
   LinkCategory,
 } from "@/types/link";
+import { addLinkToFirestore, getLinksFromFirestore } from "@/lib/firestore-links";
 
 // 메모리 상의 Mock 데이터 저장소 (서버 라이프사이클 동안 변경 반영 시뮬레이션 가능)
 const mockLinks: LinkItem[] = [...(linksDataRaw as LinkItem[])];
@@ -35,8 +36,22 @@ export async function GET(request: Request) {
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
     const limit = Math.max(1, parseInt(searchParams.get("limit") || "10", 10));
 
+    // Firestore users/anonymous/links 링크 목록과 mockLinks 병합
+    let allLinks = [...mockLinks];
+    try {
+      const firestoreLinks = await getLinksFromFirestore();
+      if (firestoreLinks && firestoreLinks.length > 0) {
+        const linkMap = new Map<string, LinkItem>();
+        allLinks.forEach((l) => linkMap.set(l.id, l));
+        firestoreLinks.forEach((l) => linkMap.set(l.id, l));
+        allLinks = Array.from(linkMap.values());
+      }
+    } catch (e) {
+      console.warn("GET /api/links Firestore fetch fallback:", e);
+    }
+
     // 1. 필터링
-    const filtered = mockLinks.filter((item) => {
+    const filtered = allLinks.filter((item) => {
       // 핸들 필터
       if (item.userHandle && item.userHandle !== handle) return false;
 
@@ -145,37 +160,48 @@ export async function POST(request: Request) {
       );
     }
 
-    const now = new Date().toISOString();
-    const newId = `link-${Date.now().toString(36)}`;
+    // Firestore 경로 users/anonymous/links 에 저장 시도
+    let createdLink: LinkItem;
+    try {
+      createdLink = await addLinkToFirestore(
+        {
+          ...body,
+          displayOrder: body.displayOrder ?? mockLinks.length + 1,
+        },
+        "hong"
+      );
+    } catch (firestoreError) {
+      console.warn("Firestore 저장 실패, 로컬 메모리 폴백 사용:", firestoreError);
+      const now = new Date().toISOString();
+      const newId = `link-${Date.now().toString(36)}`;
+      createdLink = {
+        id: newId,
+        userHandle: "hong",
+        title: body.title.trim(),
+        subtitle: body.subtitle?.trim(),
+        url: body.url.trim(),
+        category: body.category || "portfolio",
+        iconType: body.iconType || "globe",
+        iconBg: body.iconBg || "#E8F3FF",
+        iconColor: body.iconColor || "#3182F6",
+        badge: body.badge?.trim(),
+        isActive: body.isActive ?? true,
+        isPinned: body.isPinned ?? false,
+        displayOrder: body.displayOrder ?? mockLinks.length + 1,
+        clickCount: 0,
+        createdAt: now,
+        updatedAt: now,
+      };
+    }
 
-    // 새 링크 객체 조립
-    const newLink: LinkItem = {
-      id: newId,
-      userHandle: "hong",
-      title: body.title.trim(),
-      subtitle: body.subtitle?.trim(),
-      url: body.url.trim(),
-      category: body.category || "portfolio",
-      iconType: body.iconType || "globe",
-      iconBg: body.iconBg || "#E8F3FF",
-      iconColor: body.iconColor || "#3182F6",
-      badge: body.badge?.trim(),
-      isActive: body.isActive ?? true,
-      isPinned: body.isPinned ?? false,
-      displayOrder: body.displayOrder ?? mockLinks.length + 1,
-      clickCount: 0,
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    mockLinks.push(newLink);
+    mockLinks.push(createdLink);
 
     const responsePayload: ApiResponse<LinkItem> = {
       success: true,
       statusCode: 201,
-      message: "새 링크가 성공적으로 등록되었습니다.",
-      data: newLink,
-      timestamp: now,
+      message: "새 링크가 Firestore에 성공적으로 등록되었습니다.",
+      data: createdLink,
+      timestamp: createdLink.createdAt,
     };
 
     return NextResponse.json(responsePayload, { status: 201 });

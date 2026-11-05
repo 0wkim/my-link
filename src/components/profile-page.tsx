@@ -25,6 +25,7 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
   const currentHandle = useProfileStore((s) => s.currentHandle);
   const setCurrentHandle = useProfileStore((s) => s.setCurrentHandle);
   const addLink = useProfileStore((s) => s.addLink);
+  const syncFirestoreLinks = useProfileStore((s) => s.syncFirestoreLinks);
   const trackClick = useProfileStore((s) => s.trackClick);
   const trackView = useProfileStore((s) => s.trackView);
   const resetToMockData = useProfileStore((s) => s.resetToMockData);
@@ -46,27 +47,33 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
   const [isIntroModalOpen, setIsIntroModalOpen] = useState(false);
   const [isAddLinkModalOpen, setIsAddLinkModalOpen] = useState(false);
 
-  // 새 링크 추가 핸들러 (로컬 상태 및 LocalStorage 즉각 반영)
-  const handleAddLink = (input: LinkCreateInput) => {
-    const newLink = addLink(activeHandle, input);
-    // 검색어나 카테고리 필터가 걸려 있으면 방금 추가한 링크가 안 보일 수 있으므로 초기화
-    if (
-      searchQuery.trim() ||
-      (selectedCategory !== "all" && selectedCategory !== input.category)
-    ) {
-      setSearchQuery("");
-      setSelectedCategory("all");
+  // 새 링크 추가 핸들러 (Firestore users/anonymous/links 저장 및 로컬 상태 반영)
+  const handleAddLink = async (input: LinkCreateInput) => {
+    try {
+      const newLink = await addLink(activeHandle, input);
+      // 검색어나 카테고리 필터가 걸려 있으면 방금 추가한 링크가 안 보일 수 있으므로 초기화
+      if (
+        searchQuery.trim() ||
+        (selectedCategory !== "all" && selectedCategory !== input.category)
+      ) {
+        setSearchQuery("");
+        setSelectedCategory("all");
+      }
+      showToast(`'${newLink.title}' 링크를 추가했어요`);
+    } catch (error) {
+      console.error("링크 추가 중 오류 발생:", error);
+      showToast("링크 추가 중 오류가 발생했습니다.");
     }
-    showToast(`'${newLink.title}' 링크를 추가했어요`);
   };
 
   // 활성 엔트리 (오버라이드 -> props -> 스토어 -> 기본값)
   const activeHandle = overrideHandle || normalizedInitial || currentHandle || "hong";
 
-  // 마운트 또는 핸들 변경 시 뷰 카운트 1 증가
+  // 마운트 또는 핸들 변경 시 뷰 카운트 1 증가 및 Firestore 링크 동기화
   useEffect(() => {
     trackView(activeHandle);
-  }, [activeHandle, trackView]);
+    syncFirestoreLinks(activeHandle);
+  }, [activeHandle, trackView, syncFirestoreLinks]);
 
   const userEntry = profiles[activeHandle] || profiles.hong;
   const profile = userEntry?.profile;

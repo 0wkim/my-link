@@ -14,6 +14,7 @@ import type {
 import fallbackLinksRaw from "@/data/links.json";
 import mockDatabaseRaw from "@/data/mock-database.json";
 import { trackLinkClick } from "@/lib/mock-api";
+import { addLinkToFirestore, getLinksFromFirestore } from "@/lib/firestore-links";
 
 // 초기 시드 데이터 조립 (@hong + @sujin)
 export function getInitialSeedDatabase(): LocalDatabase {
@@ -86,7 +87,8 @@ export interface ProfileStoreActions {
   getEntry: (handle?: string) => UserDatabaseEntry;
   updateProfile: (handle: string, data: Partial<UserProfile>) => void;
   updateTheme: (handle: string, theme: Partial<ProfileTheme>) => void;
-  addLink: (handle: string, input: LinkCreateInput) => LinkItem;
+  addLink: (handle: string, input: LinkCreateInput) => Promise<LinkItem>;
+  syncFirestoreLinks: (handle?: string) => Promise<void>;
   updateLink: (handle: string, linkId: string, input: LinkUpdateInput) => void;
   deleteLink: (handle: string, linkId: string) => void;
   toggleLinkActive: (handle: string, linkId: string) => void;
@@ -160,45 +162,92 @@ export const useProfileStore = create<ProfileStore>()(
         });
       },
 
-      addLink: (handle: string, input: LinkCreateInput) => {
+      addLink: async (handle: string, input: LinkCreateInput) => {
         const key = handle.replace(/^@/, "");
-        const now = new Date().toISOString();
-        const newId = `link-${Date.now().toString(36)}`;
         const entry = get().profiles[key] || getInitialSeedDatabase().hong;
+        const displayOrder = input.displayOrder ?? entry.links.length + 1;
 
-        const newLink: LinkItem = {
-          id: newId,
-          userHandle: key,
-          title: input.title.trim(),
-          subtitle: input.subtitle?.trim(),
-          url: input.url.trim(),
-          category: input.category || "portfolio",
-          iconType: input.iconType || "globe",
-          iconBg: input.iconBg || "#E8F3FF",
-          iconColor: input.iconColor || "#3182F6",
-          badge: input.badge?.trim(),
-          isActive: input.isActive ?? true,
-          isPinned: input.isPinned ?? false,
-          displayOrder: input.displayOrder ?? entry.links.length + 1,
-          clickCount: 0,
-          createdAt: now,
-          updatedAt: now,
-        };
+        let createdLink: LinkItem;
+        try {
+          // Firestore 경로 users/anonymous/links 에 저장
+          createdLink = await addLinkToFirestore(
+            {
+              ...input,
+              displayOrder,
+            },
+            key
+          );
+        } catch (error) {
+          console.error("Firestore 링크 저장 실패, 로컬 폴백 생성:", error);
+          const now = new Date().toISOString();
+          const fallbackId = `link-${Date.now().toString(36)}`;
+          createdLink = {
+            id: fallbackId,
+            userHandle: key,
+            title: input.title.trim(),
+            subtitle: input.subtitle?.trim(),
+            url: input.url.trim(),
+            category: input.category || "portfolio",
+            iconType: input.iconType || "globe",
+            iconBg: input.iconBg || "#E8F3FF",
+            iconColor: input.iconColor || "#3182F6",
+            badge: input.badge?.trim(),
+            isActive: input.isActive ?? true,
+            isPinned: input.isPinned ?? false,
+            displayOrder,
+            clickCount: 0,
+            createdAt: now,
+            updatedAt: now,
+          };
+        }
 
         set((state) => {
           const currentEntry = state.profiles[key] || getInitialSeedDatabase().hong;
+          const filteredLinks = currentEntry.links.filter((l) => l.id !== createdLink.id);
           return {
             profiles: {
               ...state.profiles,
               [key]: {
                 ...currentEntry,
-                links: [...currentEntry.links, newLink],
+                links: [...filteredLinks, createdLink],
               },
             },
           };
         });
 
-        return newLink;
+        return createdLink;
+      },
+
+      syncFirestoreLinks: async (handle?: string) => {
+        const targetHandle = (handle || get().currentHandle).replace(/^@/, "");
+        try {
+          const firestoreLinks = await getLinksFromFirestore();
+          if (!firestoreLinks || firestoreLinks.length === 0) return;
+
+          set((state) => {
+            const entry = state.profiles[targetHandle] || getInitialSeedDatabase().hong;
+            const map = new Map<string, LinkItem>();
+            entry.links.forEach((link) => map.set(link.id, link));
+            firestoreLinks.forEach((link) => map.set(link.id, link));
+
+            const merged = Array.from(map.values()).sort((a, b) => {
+              if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
+              return a.displayOrder - b.displayOrder;
+            });
+
+            return {
+              profiles: {
+                ...state.profiles,
+                [targetHandle]: {
+                  ...entry,
+                  links: merged,
+                },
+              },
+            };
+          });
+        } catch (error) {
+          console.error("Firestore 링크 동기화 오류:", error);
+        }
       },
 
       updateLink: (handle: string, linkId: string, input: LinkUpdateInput) => {

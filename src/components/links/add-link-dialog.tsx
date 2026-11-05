@@ -26,7 +26,7 @@ import { CATEGORY_LABELS } from "./category-filter";
 interface AddLinkDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onAddLink: (input: LinkCreateInput) => void;
+  onAddLink: (input: LinkCreateInput) => void | Promise<void>;
   existingLinks?: LinkItem[];
 }
 
@@ -213,7 +213,7 @@ export function AddLinkDialog({
     setValue,
     watch,
     reset,
-    formState: { errors },
+    formState: { errors, isSubmitting },
   } = useForm<AddLinkFormValues>({
     resolver: zodResolver(formSchema),
     mode: "onChange",
@@ -249,24 +249,28 @@ export function AddLinkDialog({
   };
 
   // 폼 제출
-  const onSubmit = (data: AddLinkFormValues) => {
+  const onSubmit = async (data: AddLinkFormValues) => {
     const finalUrl = normalizeUrl(data.url);
 
-    onAddLink({
-      title: data.title.trim(),
-      url: finalUrl,
-      subtitle: data.subtitle?.trim() || undefined,
-      category: data.category,
-      iconType: data.iconType,
-      iconBg: data.iconBg,
-      iconColor: data.iconColor,
-      badge: data.badge?.trim() || undefined,
-      isPinned: data.isPinned,
-      isActive: true,
-    });
+    try {
+      await onAddLink({
+        title: data.title.trim(),
+        url: finalUrl,
+        subtitle: data.subtitle?.trim() || undefined,
+        category: data.category,
+        iconType: data.iconType,
+        iconBg: data.iconBg,
+        iconColor: data.iconColor,
+        badge: data.badge?.trim() || undefined,
+        isPinned: data.isPinned,
+        isActive: true,
+      });
 
-    reset();
-    onOpenChange(false);
+      reset();
+      onOpenChange(false);
+    } catch (err) {
+      console.error("onAddLink error in dialog:", err);
+    }
   };
 
   // 닫기 및 초기화
@@ -640,10 +644,11 @@ export function AddLinkDialog({
               type="submit"
               variant="primary"
               size="default"
-              className="w-full sm:flex-1 cursor-pointer shadow-xs gap-1.5"
+              disabled={isSubmitting}
+              className="w-full sm:flex-1 cursor-pointer shadow-xs gap-1.5 disabled:opacity-60"
             >
               <IconPlus className="w-4.5 h-4.5 text-white" />
-              <span>링크 추가하기</span>
+              <span>{isSubmitting ? "추가하는 중..." : "링크 추가하기"}</span>
             </Button>
           </DialogFooter>
         </form>
