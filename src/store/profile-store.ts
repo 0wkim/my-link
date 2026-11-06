@@ -16,6 +16,8 @@ import mockDatabaseRaw from "@/data/mock-database.json";
 import { trackLinkClick } from "@/lib/mock-api";
 import {
   addLinkToFirestore,
+  updateLinkInFirestore,
+  deleteLinkFromFirestore,
   getLinksFromFirestore,
   subscribeToLinksFromFirestore,
 } from "@/lib/firestore-links";
@@ -67,8 +69,8 @@ export interface ProfileStoreActions {
   addLink: (handle: string, input: LinkCreateInput) => Promise<LinkItem>;
   syncFirestoreLinks: (handle?: string) => Promise<void>;
   subscribeFirestoreLinks: (handle?: string) => Unsubscribe;
-  updateLink: (handle: string, linkId: string, input: LinkUpdateInput) => void;
-  deleteLink: (handle: string, linkId: string) => void;
+  updateLink: (handle: string, linkId: string, input: LinkUpdateInput) => Promise<void>;
+  deleteLink: (handle: string, linkId: string) => Promise<void>;
   toggleLinkActive: (handle: string, linkId: string) => void;
   reorderLinks: (handle: string, orderedLinkIds: string[]) => void;
   trackClick: (handle: string, linkId: string) => void;
@@ -254,9 +256,18 @@ export const useProfileStore = create<ProfileStore>()(
         );
       },
 
-      updateLink: (handle: string, linkId: string, input: LinkUpdateInput) => {
+      updateLink: async (handle: string, linkId: string, input: LinkUpdateInput) => {
         const key = handle.replace(/^@/, "");
         const now = new Date().toISOString();
+
+        // 1. Firestore 업데이트
+        try {
+          await updateLinkInFirestore(linkId, input);
+        } catch (error) {
+          console.error("Firestore 링크 수정 오류:", error);
+        }
+
+        // 2. 로컬 상태 업데이트
         set((state) => {
           const entry = state.profiles[key];
           if (!entry) return state;
@@ -282,8 +293,17 @@ export const useProfileStore = create<ProfileStore>()(
         });
       },
 
-      deleteLink: (handle: string, linkId: string) => {
+      deleteLink: async (handle: string, linkId: string) => {
         const key = handle.replace(/^@/, "");
+
+        // 1. Firestore 삭제
+        try {
+          await deleteLinkFromFirestore(linkId);
+        } catch (error) {
+          console.error("Firestore 링크 삭제 오류:", error);
+        }
+
+        // 2. 로컬 상태 업데이트
         set((state) => {
           const entry = state.profiles[key];
           if (!entry) return state;

@@ -9,9 +9,12 @@ import { IconSearch, IconPlus } from "@/components/icons";
 
 interface LinkListProps {
   links: LinkItem[];
+  allLinks?: LinkItem[];
   onLinkClick: (link: LinkItem, e: React.MouseEvent) => void;
   onResetFilters: () => void;
   onOpenAddLink?: () => void;
+  onUpdateLink?: (linkId: string, input: import("@/types/link").LinkUpdateInput) => Promise<void>;
+  onDeleteLink?: (linkId: string) => Promise<void>;
   isLoading?: boolean;
 }
 
@@ -33,9 +36,12 @@ function LinkListLoading() {
 
 export function LinkList({
   links,
+  allLinks,
   onLinkClick,
   onResetFilters,
   onOpenAddLink,
+  onUpdateLink,
+  onDeleteLink,
   isLoading = false,
 }: LinkListProps) {
   // 로딩 중: 로딩 표시 제공
@@ -89,7 +95,14 @@ export function LinkList({
   return (
     <section className="space-y-3">
       {links.map((link) => (
-        <LinkCard key={link.id} link={link} onLinkClick={onLinkClick} />
+        <LinkCard
+          key={link.id}
+          link={link}
+          existingLinks={allLinks || links}
+          onLinkClick={onLinkClick}
+          onUpdateLink={onUpdateLink}
+          onDeleteLink={onDeleteLink}
+        />
       ))}
     </section>
   );

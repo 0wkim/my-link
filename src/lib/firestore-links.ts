@@ -2,6 +2,8 @@ import {
   collection,
   doc,
   setDoc,
+  updateDoc,
+  deleteDoc,
   getDocs,
   query,
   orderBy,
@@ -10,7 +12,7 @@ import {
   type Unsubscribe,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { LinkItem, LinkCreateInput } from "@/types/link";
+import type { LinkItem, LinkCreateInput, LinkUpdateInput } from "@/types/link";
 
 /**
  * Firestore 저장 경로 상수
@@ -92,6 +94,52 @@ export async function addLinkToFirestore(
   await setDoc(newDocRef, firestoreData);
 
   return newLink;
+}
+
+/**
+ * Firestore (경로: users/anonymous/links/{linkId}) 링크 수정
+ *
+ * @param linkId 수정할 링크 ID
+ * @param input 링크 수정 입력 데이터
+ */
+export async function updateLinkInFirestore(
+  linkId: string,
+  input: LinkUpdateInput
+): Promise<void> {
+  const docRef = doc(
+    db,
+    FIRESTORE_USERS_COLLECTION,
+    FIRESTORE_ANONYMOUS_DOC,
+    FIRESTORE_LINKS_COLLECTION,
+    linkId
+  );
+
+  const now = new Date().toISOString();
+  const updateData: Record<string, any> = {
+    ...input,
+    updatedAt: now,
+    _serverUpdatedAt: serverTimestamp(),
+  };
+
+  const sanitized = sanitizeForFirestore(updateData);
+  await updateDoc(docRef, sanitized);
+}
+
+/**
+ * Firestore (경로: users/anonymous/links/{linkId}) 링크 삭제
+ *
+ * @param linkId 삭제할 링크 ID
+ */
+export async function deleteLinkFromFirestore(linkId: string): Promise<void> {
+  const docRef = doc(
+    db,
+    FIRESTORE_USERS_COLLECTION,
+    FIRESTORE_ANONYMOUS_DOC,
+    FIRESTORE_LINKS_COLLECTION,
+    linkId
+  );
+
+  await deleteDoc(docRef);
 }
 
 /**

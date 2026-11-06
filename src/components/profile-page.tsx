@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { useProfileStore } from "@/store/profile-store";
-import type { LinkItem, LinkCategory, LinkCreateInput } from "@/types/link";
+import type { LinkItem, LinkCategory, LinkCreateInput, LinkUpdateInput } from "@/types/link";
 import { ProfileActions } from "@/components/profile/profile-actions";
 import { ProfileHeader } from "@/components/profile/profile-header";
 import { CategoryFilter } from "@/components/links/category-filter";
@@ -22,6 +22,8 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
   const profiles = useProfileStore((s) => s.profiles);
   const currentHandle = useProfileStore((s) => s.currentHandle);
   const addLink = useProfileStore((s) => s.addLink);
+  const updateLink = useProfileStore((s) => s.updateLink);
+  const deleteLink = useProfileStore((s) => s.deleteLink);
   const syncFirestoreLinks = useProfileStore((s) => s.syncFirestoreLinks);
   const trackClick = useProfileStore((s) => s.trackClick);
   const trackView = useProfileStore((s) => s.trackView);
@@ -56,6 +58,32 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
       showToast("링크 추가 중 오류가 발생했습니다.");
     } finally {
       setIsLinksLoading(false);
+    }
+  };
+
+  // 링크 수정 핸들러 (Firestore 업데이트 및 최신 목록 갱신)
+  const handleUpdateLink = async (linkId: string, input: LinkUpdateInput) => {
+    try {
+      await updateLink(activeHandle, linkId, input);
+      showToast("링크를 수정했어요");
+      // Firestore에서 최신 데이터 재조회하여 갱신
+      await syncFirestoreLinks(activeHandle);
+    } catch (error) {
+      console.error("링크 수정 중 오류 발생:", error);
+      showToast("링크 수정 중 오류가 발생했습니다.");
+    }
+  };
+
+  // 링크 삭제 핸들러 (Firestore 삭제 및 최신 목록 갱신)
+  const handleDeleteLink = async (linkId: string) => {
+    try {
+      await deleteLink(activeHandle, linkId);
+      showToast("링크를 삭제했어요");
+      // Firestore에서 최신 데이터 재조회하여 갱신
+      await syncFirestoreLinks(activeHandle);
+    } catch (error) {
+      console.error("링크 삭제 중 오류 발생:", error);
+      showToast("링크 삭제 중 오류가 발생했습니다.");
     }
   };
 
@@ -189,6 +217,7 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
         {/* [D] 링크 카드 리스트 스택 */}
         <LinkList
           links={filteredLinks}
+          allLinks={links}
           isLoading={isLinksLoading}
           onLinkClick={handleLinkClick}
           onResetFilters={() => {
@@ -196,6 +225,8 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
             setSelectedCategory("all");
           }}
           onOpenAddLink={() => setIsAddLinkModalOpen(true)}
+          onUpdateLink={handleUpdateLink}
+          onDeleteLink={handleDeleteLink}
         />
 
         {/* [E] 하단 푸터 (깔끔한 저작권 정보) */}
