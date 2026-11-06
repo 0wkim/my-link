@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { useRouter } from "next/navigation";
 import { useProfileStore } from "@/store/profile-store";
 import type { LinkItem, LinkCategory, LinkCreateInput } from "@/types/link";
 import { ProfileActions } from "@/components/profile/profile-actions";
@@ -17,28 +16,15 @@ interface ProfilePageProps {
 }
 
 export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps) {
-  const router = useRouter();
   const normalizedInitial = initialHandle.replace(/^@/, "");
 
   // Zustand 스토어 상태 및 액션
   const profiles = useProfileStore((s) => s.profiles);
   const currentHandle = useProfileStore((s) => s.currentHandle);
-  const setCurrentHandle = useProfileStore((s) => s.setCurrentHandle);
   const addLink = useProfileStore((s) => s.addLink);
   const syncFirestoreLinks = useProfileStore((s) => s.syncFirestoreLinks);
   const trackClick = useProfileStore((s) => s.trackClick);
   const trackView = useProfileStore((s) => s.trackView);
-  const resetToMockData = useProfileStore((s) => s.resetToMockData);
-
-  // 현재 사용자가 직접 클릭하여 선택한 임시 오버라이드 핸들
-  const [overrideHandle, setOverrideHandle] = useState<string | null>(null);
-  const [prevInitial, setPrevInitial] = useState(normalizedInitial);
-
-  // URL props(initialHandle) 변경 시 오버라이드 초기화 (React 공식 권장 패턴)
-  if (normalizedInitial !== prevInitial) {
-    setPrevInitial(normalizedInitial);
-    setOverrideHandle(null);
-  }
 
   // 로컬 상태
   const [searchQuery, setSearchQuery] = useState("");
@@ -46,8 +32,10 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isIntroModalOpen, setIsIntroModalOpen] = useState(false);
   const [isAddLinkModalOpen, setIsAddLinkModalOpen] = useState(false);
+  // Firestore 조회/갱신 중 로딩 상태 (최초 로드 시 true)
+  const [isLinksLoading, setIsLinksLoading] = useState(true);
 
-  // 새 링크 추가 핸들러 (Firestore users/anonymous/links 저장 및 로컬 상태 반영)
+  // 새 링크 추가 핸들러 (Firestore 저장 → 로컬 즉시 반영 → Firestore 재조회로 목록 갱신)
   const handleAddLink = async (input: LinkCreateInput) => {
     try {
       const newLink = await addLink(activeHandle, input);
@@ -60,19 +48,28 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
         setSelectedCategory("all");
       }
       showToast(`'${newLink.title}' 링크를 추가했어요`);
+      // Firestore에서 최신 목록 재조회 (createdAt 최신순 반영)
+      setIsLinksLoading(true);
+      await syncFirestoreLinks(activeHandle);
     } catch (error) {
       console.error("링크 추가 중 오류 발생:", error);
       showToast("링크 추가 중 오류가 발생했습니다.");
+    } finally {
+      setIsLinksLoading(false);
     }
   };
 
-  // 활성 엔트리 (오버라이드 -> props -> 스토어 -> 기본값)
-  const activeHandle = overrideHandle || normalizedInitial || currentHandle || "hong";
+  // 활성 엔트리 (hong 고정)
+  const activeHandle = "hong";
 
-  // 마운트 또는 핸들 변경 시 뷰 카운트 1 증가 및 Firestore 링크 동기화
+  // 마운트 또는 핸들 변경 시 뷰 카운트 1 증가 및 Firestore 링크 조회
   useEffect(() => {
     trackView(activeHandle);
-    syncFirestoreLinks(activeHandle);
+    setIsLinksLoading(true);
+    // users/anonymous/links 에서 createdAt 최신순으로 조회
+    syncFirestoreLinks(activeHandle).finally(() => {
+      setIsLinksLoading(false);
+    });
   }, [activeHandle, trackView, syncFirestoreLinks]);
 
   const userEntry = profiles[activeHandle] || profiles.hong;
@@ -89,12 +86,14 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
   };
 
   // 활성화된 링크 목록 필터링 및 정렬
+  // Firestore 구독이 createdAt desc 순으로 반환하므로 배열 순서를 유지하고, isPinned만 최상단으로 올림
   const activeLinks = useMemo(() => {
     return links
       .filter((link) => link.isActive)
       .sort((a, b) => {
         if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
-        return a.displayOrder - b.displayOrder;
+        // createdAt 최신순 (내림차순)
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
   }, [links]);
 
@@ -143,59 +142,6 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
     }
   };
 
-  // 프로필 공유하기
-  const handleShare = async () => {
-    if (typeof window === "undefined") return;
-    const shareUrl = window.location.href;
-
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: `${profile?.displayName}님의 마이링크`,
-          text: profile?.bio || "나만의 모바일 링크 허브를 확인해 보세요.",
-          url: shareUrl,
-        });
-        return;
-      } catch {
-        // 취소된 경우 폴백 클립보드 복사
-      }
-    }
-
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      showToast("프로필 주소를 클립보드에 복사했어요");
-    } catch {
-      showToast(`프로필 주소: ${shareUrl}`);
-    }
-  };
-
-  // 이메일 복사하기
-  const handleCopyEmail = async () => {
-    if (!profile?.email) return;
-    try {
-      await navigator.clipboard.writeText(profile.email);
-      showToast("이메일 주소를 복사했어요");
-    } catch {
-      showToast(profile.email);
-    }
-  };
-
-  // Mock 데이터 초기화 핸들러
-  const handleResetData = () => {
-    if (confirm("모든 데이터를 기본 Mock 시드 데이터로 초기화할까요?")) {
-      resetToMockData();
-      showToast("기본 Mock 데이터로 초기화했어요");
-    }
-  };
-
-  // 핸들 전환 (멀티 프로필 즉각 전환 및 URL 라우팅)
-  const handleSwitchHandle = (targetHandle: string) => {
-    setOverrideHandle(targetHandle);
-    setCurrentHandle(targetHandle);
-    router.push(`/@${targetHandle}`);
-    showToast(`@${targetHandle} 프로필로 전환했어요`);
-  };
-
   return (
     <div className="min-h-screen bg-[#F2F4F6] text-[#191F28] pb-16 selection:bg-[#3182F6] selection:text-white antialiased">
       {/* 1. TDS Toast 메시지 (상단 중앙 플로팅) */}
@@ -210,19 +156,15 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
         </div>
       )}
 
-      {/* 2. [A] 상단 액션 바 (shadcn 컴포넌트 기반) */}
+      {/* 2. [A] 상단 액션 바 (새 링크 추가 버튼) */}
       <ProfileActions
-        activeHandle={activeHandle}
-        onSwitchHandle={handleSwitchHandle}
-        onResetData={handleResetData}
-        onShare={handleShare}
         onOpenAddLink={() => setIsAddLinkModalOpen(true)}
       />
 
       {/* 3. 메인 콘텐츠 뷰포트 (최대 576px 모바일 최적화 규격) */}
       <main className="max-w-xl mx-auto px-4 sm:px-5 pt-4 space-y-4">
         {/* [B] 프로필 히어로 카드 */}
-        <ProfileHeader profile={profile} onCopyEmail={handleCopyEmail} />
+        <ProfileHeader profile={profile} />
 
         {/* [C] 링크 & 채널 검색 및 카테고리 필터 바 */}
         <CategoryFilter
@@ -243,6 +185,7 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
         {/* [D] 링크 카드 리스트 스택 */}
         <LinkList
           links={filteredLinks}
+          isLoading={isLinksLoading}
           onLinkClick={handleLinkClick}
           onResetFilters={() => {
             setSearchQuery("");

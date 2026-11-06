@@ -3,21 +3,17 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { IconShare, IconRefresh, IconPlus } from "@/components/icons";
+import { IconPlus } from "@/components/icons";
 
 interface ProfileActionsProps {
-  activeHandle: string;
-  onSwitchHandle: (handle: string) => void;
-  onResetData: () => void;
-  onShare: () => void;
+  activeHandle?: string;
+  onSwitchHandle?: (handle: string) => void;
+  onResetData?: () => void;
+  onShare?: () => void;
   onOpenAddLink?: () => void;
 }
 
 export function ProfileActions({
-  activeHandle,
-  onSwitchHandle,
-  onResetData,
-  onShare,
   onOpenAddLink,
 }: ProfileActionsProps) {
   return (
@@ -40,9 +36,8 @@ export function ProfileActions({
           </Badge>
         </div>
 
-        {/* 우측 조작 액션 (링크 추가, 핸들 전환, 초기화, 공유) */}
+        {/* 우측 조작 액션 (새 링크 추가 버튼) */}
         <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-          {/* 새 링크 추가 버튼 */}
           {onOpenAddLink && (
             <Button
               variant="primary"
@@ -55,56 +50,6 @@ export function ProfileActions({
               <span>새 링크</span>
             </Button>
           )}
-
-          {/* 멀티 프로필 계정 전환기 (@hong / @sujin) */}
-          <div className="flex items-center bg-[#F2F4F6] rounded-full p-0.5 text-[11px] sm:text-[12px] font-semibold border border-[#E5E8EB]/70">
-            <button
-              type="button"
-              onClick={() => onSwitchHandle("hong")}
-              className={`px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full transition-all cursor-pointer ${
-                activeHandle === "hong"
-                  ? "bg-white text-[#191F28] shadow-2xs font-bold"
-                  : "text-[#6B7684] hover:text-[#191F28]"
-              }`}
-              title="홍길동 프로필로 전환"
-            >
-              @hong
-            </button>
-            <button
-              type="button"
-              onClick={() => onSwitchHandle("sujin")}
-              className={`px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full transition-all cursor-pointer ${
-                activeHandle === "sujin"
-                  ? "bg-white text-[#191F28] shadow-2xs font-bold"
-                  : "text-[#6B7684] hover:text-[#191F28]"
-              }`}
-              title="이수진 프로필로 전환"
-            >
-              @sujin
-            </button>
-          </div>
-
-          {/* 기본 Mock 데이터 초기화 */}
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            onClick={onResetData}
-            title="기본 Mock 데이터로 초기화"
-            className="w-7 h-7 sm:w-8 sm:h-8 text-[#6B7684] hover:text-[#191F28]"
-          >
-            <IconRefresh className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-          </Button>
-
-          {/* 프로필 공유 */}
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            onClick={onShare}
-            title="프로필 공유하기"
-            className="w-7 h-7 sm:w-8 sm:h-8 text-[#4E5968] hover:text-[#191F28]"
-          >
-            <IconShare className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-          </Button>
         </div>
       </div>
     </header>

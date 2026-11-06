@@ -10,8 +10,6 @@ export function generateStaticParams() {
   return [
     { handle: "hong" },
     { handle: "@hong" },
-    { handle: "sujin" },
-    { handle: "@sujin" },
   ];
 }
 

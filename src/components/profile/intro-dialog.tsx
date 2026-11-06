@@ -37,7 +37,7 @@ export function IntroDialog({ open, onOpenChange }: IntroDialogProps) {
           <div className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-[#3182F6] shrink-0" />
             <span>
-              기본 시드 계정: <strong>@hong</strong> (개발자), <strong>@sujin</strong> (창작자)
+              기본 프로필: <strong>@hong</strong> (개발자)
             </span>
           </div>
           <div className="flex items-center gap-2">

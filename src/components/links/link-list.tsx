@@ -12,6 +12,25 @@ interface LinkListProps {
   onLinkClick: (link: LinkItem, e: React.MouseEvent) => void;
   onResetFilters: () => void;
   onOpenAddLink?: () => void;
+  isLoading?: boolean;
+}
+
+/** 링크 카드 스켈레톤 (로딩 중 플레이스홀더) */
+function LinkCardSkeleton() {
+  return (
+    <div className="bg-white rounded-[20px] p-4 sm:p-4.5 border border-[#E5E8EB] flex items-center gap-3.5 animate-pulse">
+      {/* 아이콘 박스 */}
+      <div className="w-11 h-11 rounded-[14px] bg-[#F2F4F6] shrink-0" />
+      {/* 텍스트 영역 */}
+      <div className="flex-1 space-y-2 min-w-0">
+        <div className="h-4 bg-[#F2F4F6] rounded-full w-2/5" />
+        <div className="h-3 bg-[#F2F4F6] rounded-full w-3/5" />
+        <div className="h-3 bg-[#F2F4F6] rounded-full w-1/4" />
+      </div>
+      {/* Chevron 자리 */}
+      <div className="w-8 h-8 rounded-full bg-[#F2F4F6] shrink-0" />
+    </div>
+  );
 }
 
 export function LinkList({
@@ -19,7 +38,19 @@ export function LinkList({
   onLinkClick,
   onResetFilters,
   onOpenAddLink,
+  isLoading = false,
 }: LinkListProps) {
+  // 로딩 중: 스켈레톤 3개 표시
+  if (isLoading) {
+    return (
+      <section className="space-y-3" aria-busy="true" aria-label="링크 목록 불러오는 중">
+        <LinkCardSkeleton />
+        <LinkCardSkeleton />
+        <LinkCardSkeleton />
+      </section>
+    );
+  }
+
   if (links.length === 0) {
     return (
       <Card className="rounded-[24px] text-center border-[#E5E8EB]">

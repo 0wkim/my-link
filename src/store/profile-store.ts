@@ -14,11 +14,15 @@ import type {
 import fallbackLinksRaw from "@/data/links.json";
 import mockDatabaseRaw from "@/data/mock-database.json";
 import { trackLinkClick } from "@/lib/mock-api";
-import { addLinkToFirestore, getLinksFromFirestore } from "@/lib/firestore-links";
+import {
+  addLinkToFirestore,
+  getLinksFromFirestore,
+  subscribeToLinksFromFirestore,
+} from "@/lib/firestore-links";
+import type { Unsubscribe } from "firebase/firestore";
 
-// 초기 시드 데이터 조립 (@hong + @sujin)
+// 초기 시드 데이터 조립 (@hong)
 export function getInitialSeedDatabase(): LocalDatabase {
-  const mockDb = mockDatabaseRaw as unknown as LocalDatabase;
   const initialLinks = fallbackLinksRaw as LinkItem[];
 
   return {
@@ -47,31 +51,6 @@ export function getInitialSeedDatabase(): LocalDatabase {
       },
       links: [...initialLinks],
     },
-    sujin: {
-      profile: {
-        ...(mockDb.sujin?.profile || {
-          handle: "sujin",
-          displayName: "이수진",
-          bio: "일상을 따뜻한 색감으로 그리는 일러스트레이터 겸 테크 크리에이터예요.",
-          avatarUrl: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&auto=format&fit=crop&q=80",
-          role: "프리랜서 일러스트레이터",
-          location: "서울 · 대한민국",
-          email: "sujin.illust@example.com",
-          viewsCount: 8920,
-          socials: {
-            instagram: "https://instagram.com/sujin_draws",
-            youtube: "https://youtube.com/@sujin_studio",
-          },
-        }),
-      },
-      theme: {
-        presetId: "minimal",
-        backgroundColor: "#FFFFFF",
-        buttonShape: "pill",
-        buttonStyle: "outline",
-      },
-      links: mockDb.sujin?.links || [],
-    },
   };
 }
 
@@ -89,6 +68,7 @@ export interface ProfileStoreActions {
   updateTheme: (handle: string, theme: Partial<ProfileTheme>) => void;
   addLink: (handle: string, input: LinkCreateInput) => Promise<LinkItem>;
   syncFirestoreLinks: (handle?: string) => Promise<void>;
+  subscribeFirestoreLinks: (handle?: string) => Unsubscribe;
   updateLink: (handle: string, linkId: string, input: LinkUpdateInput) => void;
   deleteLink: (handle: string, linkId: string) => void;
   toggleLinkActive: (handle: string, linkId: string) => void;
@@ -221,26 +201,20 @@ export const useProfileStore = create<ProfileStore>()(
       syncFirestoreLinks: async (handle?: string) => {
         const targetHandle = (handle || get().currentHandle).replace(/^@/, "");
         try {
+          // createdAt desc 순으로 정렬된 링크 조회
           const firestoreLinks = await getLinksFromFirestore();
+          // Firestore에 데이터가 없으면 로컬 상태 유지
           if (!firestoreLinks || firestoreLinks.length === 0) return;
 
           set((state) => {
             const entry = state.profiles[targetHandle] || getInitialSeedDatabase().hong;
-            const map = new Map<string, LinkItem>();
-            entry.links.forEach((link) => map.set(link.id, link));
-            firestoreLinks.forEach((link) => map.set(link.id, link));
-
-            const merged = Array.from(map.values()).sort((a, b) => {
-              if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
-              return a.displayOrder - b.displayOrder;
-            });
-
             return {
               profiles: {
                 ...state.profiles,
                 [targetHandle]: {
                   ...entry,
-                  links: merged,
+                  // Firestore를 단일 소스로: 반환된 목록으로 교체
+                  links: firestoreLinks,
                 },
               },
             };
@@ -248,6 +222,38 @@ export const useProfileStore = create<ProfileStore>()(
         } catch (error) {
           console.error("Firestore 링크 동기화 오류:", error);
         }
+      },
+
+      /**
+       * Firestore (users/anonymous/links)를 실시간 구독합니다.
+       * createdAt 내림차순으로 정렬된 링크를 받아 스토어를 교체합니다.
+       * 반환된 Unsubscribe 함수를 호출해 구독을 해제하세요.
+       */
+      subscribeFirestoreLinks: (handle?: string): Unsubscribe => {
+        const targetHandle = (handle || get().currentHandle).replace(/^@/, "");
+
+        return subscribeToLinksFromFirestore(
+          (firestoreLinks) => {
+            set((state) => {
+              const entry =
+                state.profiles[targetHandle] || getInitialSeedDatabase().hong;
+
+              return {
+                profiles: {
+                  ...state.profiles,
+                  [targetHandle]: {
+                    ...entry,
+                    // Firestore가 createdAt desc 정렬로 반환하므로 그대로 사용
+                    links: firestoreLinks,
+                  },
+                },
+              };
+            });
+          },
+          (error) => {
+            console.error("Firestore 실시간 구독 오류:", error);
+          }
+        );
       },
 
       updateLink: (handle: string, linkId: string, input: LinkUpdateInput) => {

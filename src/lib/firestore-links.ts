@@ -100,7 +100,7 @@ export async function addLinkToFirestore(
 export async function getLinksFromFirestore(): Promise<LinkItem[]> {
   try {
     const collectionRef = getAnonymousLinksCollectionRef();
-    const q = query(collectionRef, orderBy("displayOrder", "asc"));
+    const q = query(collectionRef, orderBy("createdAt", "desc"));
     const snapshot = await getDocs(q);
 
     const links: LinkItem[] = [];
@@ -141,7 +141,7 @@ export function subscribeToLinksFromFirestore(
   onError?: (error: Error) => void
 ): Unsubscribe {
   const collectionRef = getAnonymousLinksCollectionRef();
-  const q = query(collectionRef, orderBy("displayOrder", "asc"));
+  const q = query(collectionRef, orderBy("createdAt", "desc"));
 
   return onSnapshot(
     q,
