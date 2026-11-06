@@ -15,20 +15,18 @@ interface LinkListProps {
   isLoading?: boolean;
 }
 
-/** 링크 카드 스켈레톤 (로딩 중 플레이스홀더) */
-function LinkCardSkeleton() {
+/** 링크 목록 로딩 스피너 및 안내 문구 */
+function LinkListLoading() {
   return (
-    <div className="bg-white rounded-[20px] p-4 sm:p-4.5 border border-[#E5E8EB] flex items-center gap-3.5 animate-pulse">
-      {/* 아이콘 박스 */}
-      <div className="w-11 h-11 rounded-[14px] bg-[#F2F4F6] shrink-0" />
-      {/* 텍스트 영역 */}
-      <div className="flex-1 space-y-2 min-w-0">
-        <div className="h-4 bg-[#F2F4F6] rounded-full w-2/5" />
-        <div className="h-3 bg-[#F2F4F6] rounded-full w-3/5" />
-        <div className="h-3 bg-[#F2F4F6] rounded-full w-1/4" />
-      </div>
-      {/* Chevron 자리 */}
-      <div className="w-8 h-8 rounded-full bg-[#F2F4F6] shrink-0" />
+    <div
+      className="bg-white rounded-[24px] border border-[#E5E8EB] p-10 flex flex-col items-center justify-center gap-3 text-center"
+      aria-busy="true"
+      aria-label="링크 목록을 불러오는 중입니다"
+    >
+      <div className="w-8 h-8 rounded-full border-3 border-[#E5E8EB] border-t-[#3182F6] animate-spin" />
+      <p className="text-[14px] font-medium text-[#6B7684]">
+        링크 목록을 불러오고 있어요...
+      </p>
     </div>
   );
 }
@@ -40,13 +38,11 @@ export function LinkList({
   onOpenAddLink,
   isLoading = false,
 }: LinkListProps) {
-  // 로딩 중: 스켈레톤 3개 표시
+  // 로딩 중: 로딩 표시 제공
   if (isLoading) {
     return (
-      <section className="space-y-3" aria-busy="true" aria-label="링크 목록 불러오는 중">
-        <LinkCardSkeleton />
-        <LinkCardSkeleton />
-        <LinkCardSkeleton />
+      <section className="space-y-3" aria-busy="true">
+        <LinkListLoading />
       </section>
     );
   }

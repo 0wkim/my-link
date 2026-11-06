@@ -23,8 +23,6 @@ import type { Unsubscribe } from "firebase/firestore";
 
 // 초기 시드 데이터 조립 (@hong)
 export function getInitialSeedDatabase(): LocalDatabase {
-  const initialLinks = fallbackLinksRaw as LinkItem[];
-
   return {
     hong: {
       profile: {
@@ -49,7 +47,7 @@ export function getInitialSeedDatabase(): LocalDatabase {
         buttonShape: "rounded",
         buttonStyle: "fill",
       },
-      links: [...initialLinks],
+      links: [],
     },
   };
 }

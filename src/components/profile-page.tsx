@@ -75,7 +75,11 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
   const userEntry = profiles[activeHandle] || profiles.hong;
   const profile = userEntry?.profile;
   const rawLinks = userEntry?.links;
-  const links = useMemo(() => rawLinks || [], [rawLinks]);
+  // 로딩 중일 때는 빈 배열을 전달하여 이전 데이터가 화면에 깜빡이며 노출되지 않도록 방지
+  const links = useMemo(() => {
+    if (isLinksLoading) return [];
+    return rawLinks || [];
+  }, [rawLinks, isLinksLoading]);
 
   // 토스트 메시지 표시
   const showToast = (message: string) => {
