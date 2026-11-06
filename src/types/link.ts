@@ -82,6 +82,7 @@ export interface LinkCreateInput {
 
 export interface LinkUpdateInput extends Partial<LinkCreateInput> {
   clickCount?: number;
+  updatedAt?: string;
 }
 
 export interface UserProfile {

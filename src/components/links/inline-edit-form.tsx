@@ -210,9 +210,22 @@ export function InlineEditForm({
           <p className="text-[12px] text-[#6B7684] truncate">
             {watchSubtitle?.trim() || "보조 설명 없음"}
           </p>
-          <div className="text-[11px] text-[#8B95A1] flex items-center gap-1 mt-0.5">
-            <IconGlobe className="w-3 h-3 text-[#8B95A1]" />
-            <span className="truncate">{previewDomain}</span>
+          <div className="text-[11px] text-[#8B95A1] flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
+            <span className="flex items-center gap-1">
+              <IconGlobe className="w-3 h-3 text-[#8B95A1]" />
+              <span className="truncate">{previewDomain}</span>
+            </span>
+            {link.updatedAt && (
+              <span>
+                · 최근 수정: {new Date(link.updatedAt).toLocaleDateString("ko-KR", {
+                  year: "numeric",
+                  month: "2-digit",
+                  day: "2-digit",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </span>
+            )}
           </div>
         </div>
       </div>

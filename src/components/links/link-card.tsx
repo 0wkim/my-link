@@ -46,6 +46,24 @@ export function LinkCard({
 
   const domain = getDomainFromUrl(link.url);
 
+  // 수정 일시 포맷팅 (updatedAt 표시)
+  const formatUpdatedAt = (dateStr?: string) => {
+    if (!dateStr) return null;
+    try {
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return null;
+      return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(
+        date.getDate()
+      ).padStart(2, "0")} ${String(date.getHours()).padStart(2, "0")}:${String(
+        date.getMinutes()
+      ).padStart(2, "0")}`;
+    } catch {
+      return null;
+    }
+  };
+
+  const formattedUpdatedAt = formatUpdatedAt(link.updatedAt);
+
   // 수정 저장 핸들러
   const handleSaveEdit = async (linkId: string, input: LinkUpdateInput) => {
     if (onUpdateLink) {
@@ -140,8 +158,8 @@ export function LinkCard({
                 </p>
               )}
 
-              {/* 도메인 칩 & 누적 클릭수 카운터 */}
-              <div className="flex items-center gap-3 text-[12px] text-[#8B95A1] tabular-nums">
+              {/* 도메인 칩 & 누적 클릭수 카운터 & 수정 시각 (updatedAt) */}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-[#8B95A1] tabular-nums">
                 <span className="inline-flex items-center gap-1 font-medium text-[#6B7684]">
                   <IconGlobe className="w-3.5 h-3.5 text-[#8B95A1]" />
                   {domain}
@@ -150,6 +168,12 @@ export function LinkCard({
                   <IconCursorClick className="w-3.5 h-3.5 text-[#8B95A1]" />
                   {(link.clickCount || 0).toLocaleString()}회 클릭
                 </span>
+                {formattedUpdatedAt && (
+                  <span className="inline-flex items-center gap-1 text-[11px] text-[#8B95A1]">
+                    <span>·</span>
+                    <span>수정 {formattedUpdatedAt}</span>
+                  </span>
+                )}
               </div>
             </div>
           </div>
