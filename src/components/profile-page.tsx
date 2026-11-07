@@ -42,7 +42,10 @@ interface ProfilePageProps {
   initialHandle?: string;
 }
 
-export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps) {
+export default function ProfilePage({ initialHandle }: ProfilePageProps) {
+  // isMounted: SSR/CSR hydration 불일치 방지 (서버·클라이언트 초기 렌더 모두 로딩 스피너)
+  const [isMounted, setIsMounted] = useState(false);
+
   // Firebase Auth 유저 상태
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
@@ -68,13 +71,13 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
   const updateLinkMutation = useUpdateLinkMutation(currentUser?.uid);
   const deleteLinkMutation = useDeleteLinkMutation(currentUser?.uid);
 
-  // Zustand 스토어 상태 (테마 및 로컬 상태 fallback)
-  const profiles = useProfileStore((s) => s.profiles);
+  // Zustand 스토어 테마 및 통계 액션
   const updateTheme = useProfileStore((s) => s.updateTheme);
   const trackClick = useProfileStore((s) => s.trackClick);
   const trackView = useProfileStore((s) => s.trackView);
 
   // 로컬 상태
+  const [currentTheme, setCurrentTheme] = useState<ProfileTheme["presetId"]>("toss");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<LinkCategory | "all">("all");
   const [isIntroModalOpen, setIsIntroModalOpen] = useState(false);
@@ -91,11 +94,16 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
     return () => unsubscribe();
   }, []);
 
-  const activeHandle = "hong";
+  // isMounted: 클라이언트 hydration 완료 후 true로 설정
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   useEffect(() => {
-    trackView(activeHandle);
-  }, [activeHandle, trackView]);
+    if (currentUser?.uid) {
+      trackView(currentUser.uid);
+    }
+  }, [currentUser, trackView]);
 
   // Google 로그인 핸들러
   const handleGoogleLogin = async () => {
@@ -183,12 +191,12 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
     }
   };
 
-  const userEntry = profiles[activeHandle] || profiles.hong;
-  const currentTheme = userEntry?.theme?.presetId || "toss";
-
   // 테마 변경 핸들러
   const handleSelectTheme = (themeId: ProfileTheme["presetId"]) => {
-    updateTheme(activeHandle, { presetId: themeId });
+    setCurrentTheme(themeId);
+    if (currentUser?.uid) {
+      updateTheme(currentUser.uid, { presetId: themeId });
+    }
     toast.success("테마가 변경되었습니다.");
   };
 
@@ -227,37 +235,28 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
     }
   };
 
-  // 로그인 상태 및 TanStack Query userProfile에 따른 프로필 데이터 구성
-  const profile: UserProfile = useMemo(() => {
-    const baseProfile = userEntry?.profile || {
-      handle: "user",
-      displayName: "사용자",
-      bio: "마이링크에 오신 것을 환영해요.",
+  // 로그인 상태 및 TanStack Query userProfile에 따른 프로필 데이터 구성 (홍길동 목데이터 폴백 없음)
+  const profile: UserProfile | null = useMemo(() => {
+    if (!currentUser) return null;
+
+    const emailPrefix = currentUser.email ? currentUser.email.split("@")[0] : "사용자";
+    const uName = userProfile?.username || emailPrefix;
+    const dName = userProfile?.displayName || currentUser.displayName || emailPrefix;
+    const bioText = userProfile?.bio ?? `${dName}님의 개인 맞춤형 마이링크 공간이에요.`;
+    const email = userProfile?.email || currentUser.email || undefined;
+    const avatarUrl = userProfile?.avatarUrl || currentUser.photoURL || "";
+
+    return {
+      handle: uName,
+      username: uName,
+      displayName: dName,
+      email,
+      avatarUrl,
+      role: userProfile?.role || "마이링크 멤버",
+      bio: bioText,
       viewsCount: 0,
     };
-
-    if (currentUser) {
-      const emailPrefix = currentUser.email ? currentUser.email.split("@")[0] : "사용자";
-      const uName = userProfile?.username || emailPrefix;
-      const dName = userProfile?.displayName || currentUser.displayName || emailPrefix;
-      const bioText = userProfile?.bio ?? `${dName}님의 개인 맞춤형 마이링크 공간이에요.`;
-      const email = userProfile?.email || currentUser.email || baseProfile.email;
-      const avatarUrl = userProfile?.avatarUrl || currentUser.photoURL || baseProfile.avatarUrl;
-
-      return {
-        ...baseProfile,
-        handle: uName,
-        username: uName,
-        displayName: dName,
-        email,
-        avatarUrl,
-        role: "마이링크 멤버",
-        bio: bioText,
-      };
-    }
-
-    return baseProfile;
-  }, [userEntry, currentUser, userProfile]);
+  }, [currentUser, userProfile]);
 
   // TanStack Query로 조회된 링크 목록
   const links = useMemo(() => {
@@ -312,7 +311,9 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
   // 링크 클릭 핸들러 (새 탭 열기)
   const handleLinkClick = (link: LinkItem, e: React.MouseEvent) => {
     e.preventDefault();
-    trackClick(activeHandle, link.id);
+    if (currentUser?.uid) {
+      trackClick(currentUser.uid, link.id);
+    }
     if (typeof window !== "undefined") {
       window.open(link.url, "_blank", "noopener,noreferrer");
     }
@@ -332,6 +333,19 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
         return "bg-[#F2F4F6]";
     }
   }, [currentTheme]);
+
+  // 1. 클라이언트 마운트 전 (SSR 포함) 또는 인증 로딩 중: 로딩 스피너
+  // isMounted=false이면 서버·클라이언트 초기 렌더 모두 동일한 스피너 → hydration 불일치 없음
+  if (!isMounted || isAuthLoading) {
+    return (
+      <div className={`min-h-screen bg-[#F2F4F6] flex flex-col items-center justify-center p-4 selection:bg-[#3182F6]`}>
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-9 h-9 border-3 border-[#3182F6] border-t-transparent rounded-full animate-spin" />
+          <p className="text-[14px] font-medium text-[#6B7684]">마이링크를 불러오는 중이에요...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -355,8 +369,8 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
 
       {/* 2. 메인 콘텐츠 뷰포트 (최대 576px 모바일 규격) */}
       <main className="max-w-xl mx-auto px-4 sm:px-5 pt-4 space-y-4">
-        {/* 미로그인 상태 안내 배너 */}
-        {!isAuthLoading && !currentUser ? (
+        {/* 미로그인 상태: 로그인 배너만 깔끔하게 노출 (목데이터 미노출) */}
+        {!currentUser ? (
           <Card className="rounded-[24px] border-[#E5E8EB] bg-white text-center shadow-xs">
             <CardContent className="p-8 sm:p-10 space-y-4">
               <div className="w-14 h-14 rounded-full bg-[#E8F3FF] text-[#3182F6] mx-auto flex items-center justify-center shadow-2xs">
@@ -385,11 +399,28 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
           </Card>
         ) : (
           <>
-            {/* 프로필 히어로 카드 */}
-            <ProfileHeader
-              profile={profile}
-              onEditProfile={() => setIsEditProfileModalOpen(true)}
-            />
+            {/* 프로필 히어로 카드 (로딩 중에는 스켈레톤, 로드 후에는 실제 유저 프로필) */}
+            {isProfileQueryLoading ? (
+              <Card className="rounded-[24px] border-[#E5E8EB] bg-white p-6 sm:p-7 animate-pulse">
+                <div className="flex items-center justify-between mb-5">
+                  <div className="h-6 w-36 bg-[#F2F4F6] rounded-full" />
+                  <div className="h-7 w-20 bg-[#F2F4F6] rounded-full" />
+                </div>
+                <div className="flex items-start gap-4 sm:gap-5">
+                  <div className="w-16 h-16 rounded-full bg-[#E5E8EB]" />
+                  <div className="space-y-2 flex-1 pt-1">
+                    <div className="h-6 w-36 bg-[#E5E8EB] rounded-md" />
+                    <div className="h-4 w-28 bg-[#F2F4F6] rounded-md" />
+                  </div>
+                </div>
+                <div className="h-4 w-3/4 bg-[#F2F4F6] rounded-md mt-5" />
+              </Card>
+            ) : profile ? (
+              <ProfileHeader
+                profile={profile}
+                onEditProfile={() => setIsEditProfileModalOpen(true)}
+              />
+            ) : null}
 
             {/* 링크 검색 및 카테고리 필터 */}
             <CategoryFilter
