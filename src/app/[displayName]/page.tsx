@@ -4,7 +4,6 @@ import { connection } from "next/server";
 import { findUserByDisplayNameOrUsername } from "@/lib/firestore-profile";
 import { getLinksFromFirestore } from "@/lib/firestore-links";
 import { PublicProfileView } from "@/components/profile/public-profile-view";
-import { getInitialSeedDatabase } from "@/store/profile-store";
 import type { UserProfileData, LinkItem } from "@/types/link";
 
 interface PageProps {
@@ -23,38 +22,15 @@ async function DisplayNamePageContent({ params }: PageProps) {
   }
 
   // 1. displayName으로 유저 검색 (또는 username으로 유저 검색)
-  let userProfile: UserProfileData | null = await findUserByDisplayNameOrUsername(cleanParam);
+  const userProfile: UserProfileData | null = await findUserByDisplayNameOrUsername(cleanParam);
 
-  // Firestore에 아직 유저가 없고 기본 'hong' 또는 '홍길동'을 조회한 경우 시드 데이터 폴백 제공
-  if (!userProfile) {
-    const isHong = cleanParam.toLowerCase() === "hong" || cleanParam === "홍길동";
-    if (isHong) {
-      const seedHong = getInitialSeedDatabase().hong;
-      userProfile = {
-        uid: "hong",
-        username: seedHong.profile.handle,
-        displayName: seedHong.profile.displayName,
-        bio: seedHong.profile.bio,
-        avatarUrl: seedHong.profile.avatarUrl,
-        role: seedHong.profile.role,
-        email: seedHong.profile.email,
-      };
-    }
-  }
-
-  // 4. username/displayName을 찾지 못하면 404 페이지 표시
+  // 4. 유저를 찾지 못하면 404 페이지 표시 (목데이터 폴백 없음)
   if (!userProfile) {
     notFound();
   }
 
   // 2. 링크 조회: users/{userId}/links
-  let links = await getLinksFromFirestore(userProfile.uid);
-
-  // hong 시드 폴백 링크 처리 (Firestore에 데이터가 없을 때)
-  if (links.length === 0 && userProfile.uid === "hong") {
-    const seedHong = getInitialSeedDatabase().hong;
-    links = seedHong.links || [];
-  }
+  const links = await getLinksFromFirestore(userProfile.uid);
 
   // Server Component -> Client Component 전달을 위한 순수 Plain Object 보장
   const plainProfile: UserProfileData = {
@@ -71,7 +47,7 @@ async function DisplayNamePageContent({ params }: PageProps) {
 
   const plainLinks: LinkItem[] = links.map((link) => ({
     id: String(link.id),
-    userHandle: String(link.userHandle || "user"),
+    userHandle: String(link.userHandle || userProfile.username),
     title: String(link.title || ""),
     subtitle: link.subtitle ? String(link.subtitle) : undefined,
     url: String(link.url || ""),
@@ -96,8 +72,11 @@ export default function DisplayNamePage(props: PageProps) {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-[#F2F4F6] flex items-center justify-center p-4">
-          <div className="w-8 h-8 border-3 border-[#3182F6] border-t-transparent rounded-full animate-spin" />
+        <div className="min-h-screen bg-[#F2F4F6] flex flex-col items-center justify-center p-4">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-9 h-9 border-3 border-[#3182F6] border-t-transparent rounded-full animate-spin" />
+            <p className="text-[14px] font-medium text-[#6B7684]">프로필을 불러오는 중이에요...</p>
+          </div>
         </div>
       }
     >
