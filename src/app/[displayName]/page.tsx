@@ -1,23 +1,20 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
+import { connection } from "next/server";
 import { findUserByDisplayNameOrUsername } from "@/lib/firestore-profile";
 import { getLinksFromFirestore } from "@/lib/firestore-links";
 import { PublicProfileView } from "@/components/profile/public-profile-view";
 import { getInitialSeedDatabase } from "@/store/profile-store";
-import type { UserProfileData } from "@/types/link";
+import type { UserProfileData, LinkItem } from "@/types/link";
 
 interface PageProps {
   params: Promise<{ displayName: string }>;
 }
 
-export function generateStaticParams() {
-  return [
-    { displayName: "hong" },
-    { displayName: "홍길동" },
-  ];
-}
-
 async function DisplayNamePageContent({ params }: PageProps) {
+  // Next.js 16 Partial Prerendering: opt-out of static prerendering for dynamic DB calls
+  await connection();
+
   const { displayName } = await params;
   const cleanParam = decodeURIComponent(displayName).replace(/^@/, "").trim();
 
@@ -59,8 +56,40 @@ async function DisplayNamePageContent({ params }: PageProps) {
     links = seedHong.links || [];
   }
 
+  // Server Component -> Client Component 전달을 위한 순수 Plain Object 보장
+  const plainProfile: UserProfileData = {
+    uid: String(userProfile.uid),
+    username: String(userProfile.username),
+    displayName: String(userProfile.displayName),
+    bio: String(userProfile.bio || ""),
+    avatarUrl: userProfile.avatarUrl ? String(userProfile.avatarUrl) : undefined,
+    role: userProfile.role ? String(userProfile.role) : undefined,
+    email: userProfile.email ? String(userProfile.email) : undefined,
+    createdAt: userProfile.createdAt ? String(userProfile.createdAt) : undefined,
+    updatedAt: userProfile.updatedAt ? String(userProfile.updatedAt) : undefined,
+  };
+
+  const plainLinks: LinkItem[] = links.map((link) => ({
+    id: String(link.id),
+    userHandle: String(link.userHandle || "user"),
+    title: String(link.title || ""),
+    subtitle: link.subtitle ? String(link.subtitle) : undefined,
+    url: String(link.url || ""),
+    category: link.category || "portfolio",
+    iconType: link.iconType || "globe",
+    iconBg: link.iconBg ? String(link.iconBg) : undefined,
+    iconColor: link.iconColor ? String(link.iconColor) : undefined,
+    badge: link.badge ? String(link.badge) : undefined,
+    isActive: Boolean(link.isActive),
+    isPinned: Boolean(link.isPinned),
+    displayOrder: Number(link.displayOrder || 0),
+    clickCount: Number(link.clickCount || 0),
+    createdAt: String(link.createdAt || ""),
+    updatedAt: String(link.updatedAt || ""),
+  }));
+
   // 3. 화면에 프로필 정보와 링크 리스트 표시
-  return <PublicProfileView profile={userProfile} links={links} />;
+  return <PublicProfileView profile={plainProfile} links={plainLinks} />;
 }
 
 export default function DisplayNamePage(props: PageProps) {

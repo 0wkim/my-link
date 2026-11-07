@@ -19,6 +19,31 @@ export const FIRESTORE_PROFILE_DOC = "profile";
 export const FIRESTORE_USERNAMES_COLLECTION = "usernames";
 
 /**
+ * Server Component -> Client Component 직렬화 시
+ * Firestore Timestamp의 toJSON() 에러를 방지하기 위해 순수 Plain Object로 변환
+ */
+export function toPlainUserProfileData(uid: string, data: any): UserProfileData {
+  const formatTime = (val: any): string | undefined => {
+    if (!val) return undefined;
+    if (typeof val === "string") return val;
+    if (typeof val?.toDate === "function") return val.toDate().toISOString();
+    return undefined;
+  };
+
+  return {
+    uid,
+    username: String(data?.username || ""),
+    displayName: String(data?.displayName || ""),
+    bio: String(data?.bio || ""),
+    avatarUrl: data?.avatarUrl ? String(data.avatarUrl) : undefined,
+    role: data?.role ? String(data.role) : undefined,
+    email: data?.email ? String(data.email) : undefined,
+    createdAt: formatTime(data?.createdAt),
+    updatedAt: formatTime(data?.updatedAt),
+  };
+}
+
+/**
  * undefined 필드를 Firestore 저장 전 제거하는 유틸리티
  */
 function sanitize<T extends Record<string, any>>(obj: T): Record<string, any> {
@@ -91,23 +116,16 @@ export async function getUserProfile(userId: string): Promise<UserProfileData | 
     const profileSnap = await getDoc(profileDocRef);
 
     if (profileSnap.exists()) {
-      const data = profileSnap.data() as UserProfileData;
-      return {
-        ...data,
-        uid: userId,
-      };
+      return toPlainUserProfileData(userId, profileSnap.data());
     }
 
     // 2. users/{userId} 상위 문서 조회 (호환성 및 fallback)
     const userDocRef = doc(db, FIRESTORE_USERS_COLLECTION, userId);
     const userSnap = await getDoc(userDocRef);
     if (userSnap.exists()) {
-      const data = userSnap.data() as UserProfileData;
-      if (data.username || data.displayName) {
-        return {
-          ...data,
-          uid: userId,
-        };
+      const data = userSnap.data();
+      if (data?.username || data?.displayName) {
+        return toPlainUserProfileData(userId, data);
       }
     }
 
@@ -265,11 +283,7 @@ export async function findUserByDisplayNameOrUsername(
 
     if (!snapDisplay.empty) {
       const d = snapDisplay.docs[0];
-      const data = d.data() as UserProfileData;
-      return {
-        ...data,
-        uid: d.id,
-      };
+      return toPlainUserProfileData(d.id, d.data());
     }
 
     // 2. users 컬렉션에서 username 검색 (소문자 일치)
@@ -278,11 +292,7 @@ export async function findUserByDisplayNameOrUsername(
 
     if (!snapUser.empty) {
       const d = snapUser.docs[0];
-      const data = d.data() as UserProfileData;
-      return {
-        ...data,
-        uid: d.id,
-      };
+      return toPlainUserProfileData(d.id, d.data());
     }
 
     // 3. usernames 매핑 컬렉션에서 uid 역조회

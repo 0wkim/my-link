@@ -173,23 +173,30 @@ export async function getLinksFromFirestore(
     const links: LinkItem[] = [];
     snapshot.forEach((docSnap) => {
       const data = docSnap.data();
+      const formatTime = (val: any) => {
+        if (!val) return new Date().toISOString();
+        if (typeof val === "string") return val;
+        if (typeof val?.toDate === "function") return val.toDate().toISOString();
+        return new Date().toISOString();
+      };
+
       links.push({
         id: docSnap.id,
-        userHandle: data.userHandle || "hong",
-        title: data.title || "",
-        subtitle: data.subtitle || undefined,
-        url: data.url || "",
+        userHandle: String(data.userHandle || "hong"),
+        title: String(data.title || ""),
+        subtitle: data.subtitle ? String(data.subtitle) : undefined,
+        url: String(data.url || ""),
         category: data.category || "portfolio",
         iconType: data.iconType || "globe",
-        iconBg: data.iconBg || "#E8F3FF",
-        iconColor: data.iconColor || "#3182F6",
-        badge: data.badge || undefined,
-        isActive: data.isActive ?? true,
-        isPinned: data.isPinned ?? false,
-        displayOrder: data.displayOrder ?? 0,
-        clickCount: data.clickCount ?? 0,
-        createdAt: data.createdAt || new Date().toISOString(),
-        updatedAt: data.updatedAt || new Date().toISOString(),
+        iconBg: data.iconBg ? String(data.iconBg) : "#E8F3FF",
+        iconColor: data.iconColor ? String(data.iconColor) : "#3182F6",
+        badge: data.badge ? String(data.badge) : undefined,
+        isActive: Boolean(data.isActive ?? true),
+        isPinned: Boolean(data.isPinned ?? false),
+        displayOrder: Number(data.displayOrder ?? 0),
+        clickCount: Number(data.clickCount ?? 0),
+        createdAt: formatTime(data.createdAt),
+        updatedAt: formatTime(data.updatedAt),
       });
     });
 
