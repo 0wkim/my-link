@@ -329,9 +329,6 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
 
       {/* 2. 메인 콘텐츠 뷰포트 (최대 576px 모바일 최적화 규격) */}
       <main className="max-w-xl mx-auto px-4 sm:px-5 pt-4 space-y-4">
-        {/* [B] 프로필 히어로 카드 (로그인 유저 정보 반영) */}
-        <ProfileHeader profile={profile} />
-
         {/* 미로그인 상태 안내 배너 */}
         {!isAuthLoading && !currentUser ? (
           <Card className="rounded-[24px] border-[#E5E8EB] bg-white text-center shadow-xs">
@@ -362,6 +359,9 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
           </Card>
         ) : (
           <>
+            {/* [B] 프로필 히어로 카드 (로그인 유저 정보 반영) */}
+            <ProfileHeader profile={profile} />
+
             {/* [C] 링크 & 채널 검색 및 카테고리 필터 바 */}
             <CategoryFilter
               totalCount={activeLinks.length}
