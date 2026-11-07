@@ -10,16 +10,24 @@ import {
 } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useProfileStore } from "@/store/profile-store";
-import type { LinkItem, LinkCategory, LinkCreateInput, LinkUpdateInput, UserProfile } from "@/types/link";
+import type {
+  LinkItem,
+  LinkCategory,
+  LinkCreateInput,
+  LinkUpdateInput,
+  UserProfile,
+  ProfileTheme,
+} from "@/types/link";
 import { ProfileActions } from "@/components/profile/profile-actions";
 import { ProfileHeader } from "@/components/profile/profile-header";
 import { CategoryFilter } from "@/components/links/category-filter";
 import { LinkList } from "@/components/links/link-list";
 import { AddLinkDialog } from "@/components/links/add-link-dialog";
 import { IntroDialog } from "@/components/profile/intro-dialog";
-import { IconCheck, IconGoogle } from "@/components/icons";
+import { IconGoogle } from "@/components/icons";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 interface ProfilePageProps {
   initialHandle?: string;
@@ -38,6 +46,7 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
   const addLink = useProfileStore((s) => s.addLink);
   const updateLink = useProfileStore((s) => s.updateLink);
   const deleteLink = useProfileStore((s) => s.deleteLink);
+  const updateTheme = useProfileStore((s) => s.updateTheme);
   const syncFirestoreLinks = useProfileStore((s) => s.syncFirestoreLinks);
   const trackClick = useProfileStore((s) => s.trackClick);
   const trackView = useProfileStore((s) => s.trackView);
@@ -45,7 +54,6 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
   // 로컬 상태
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<LinkCategory | "all">("all");
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isIntroModalOpen, setIsIntroModalOpen] = useState(false);
   const [isAddLinkModalOpen, setIsAddLinkModalOpen] = useState(false);
   // Firestore 조회/갱신 중 로딩 상태 (최초 로드 시 true)
@@ -70,12 +78,13 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: "select_account" });
       const result = await signInWithPopup(auth, provider);
-      const name = result.user.displayName || result.user.email?.split("@")[0] || "회원";
-      showToast(`${name}님 환영합니다!`);
+      // displayName에는 이메일 앞부분 적용
+      const name = result.user.email?.split("@")[0] || result.user.displayName || "회원";
+      toast.success(`${name}님 환영합니다!`);
     } catch (error: any) {
       console.error("Google 로그인 실패:", error);
       if (error?.code !== "auth/popup-closed-by-user") {
-        showToast("로그인 중 오류가 발생했습니다.");
+        toast.error("로그인 중 오류가 발생했습니다.");
       }
     }
   };
@@ -84,10 +93,10 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      showToast("로그아웃되었습니다.");
+      toast.success("로그아웃되었습니다.");
     } catch (error) {
       console.error("로그아웃 실패:", error);
-      showToast("로그아웃 중 오류가 발생했습니다.");
+      toast.error("로그아웃 중 오류가 발생했습니다.");
     }
   };
 
@@ -104,13 +113,13 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
         setSearchQuery("");
         setSelectedCategory("all");
       }
-      showToast(`'${newLink.title}' 링크를 추가했어요`);
+      toast.success(`'${newLink.title}' 링크를 추가했어요`);
       // Firestore에서 최신 목록 재조회 (createdAt 최신순 반영)
       setIsLinksLoading(true);
       await syncFirestoreLinks(activeHandle, targetUserId);
     } catch (error) {
       console.error("링크 추가 중 오류 발생:", error);
-      showToast("링크 추가 중 오류가 발생했습니다.");
+      toast.error("링크 추가 중 오류가 발생했습니다.");
     } finally {
       setIsLinksLoading(false);
     }
@@ -121,12 +130,12 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
     try {
       const targetUserId = currentUser ? currentUser.uid : "anonymous";
       await updateLink(activeHandle, linkId, input, targetUserId);
-      showToast("링크를 수정했어요");
+      toast.success("링크를 수정했어요");
       // Firestore에서 최신 데이터 재조회하여 갱신
       await syncFirestoreLinks(activeHandle, targetUserId);
     } catch (error) {
       console.error("링크 수정 중 오류 발생:", error);
-      showToast("링크 수정 중 오류가 발생했습니다.");
+      toast.error("링크 수정 중 오류가 발생했습니다.");
     }
   };
 
@@ -135,12 +144,12 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
     try {
       const targetUserId = currentUser ? currentUser.uid : "anonymous";
       await deleteLink(activeHandle, linkId, targetUserId);
-      showToast("링크를 삭제했어요");
+      toast.success("링크를 삭제했어요");
       // Firestore에서 최신 데이터 재조회하여 갱신
       await syncFirestoreLinks(activeHandle, targetUserId);
     } catch (error) {
       console.error("링크 삭제 중 오류 발생:", error);
-      showToast("링크 삭제 중 오류가 발생했습니다.");
+      toast.error("링크 삭제 중 오류가 발생했습니다.");
     }
   };
 
@@ -163,8 +172,38 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
 
   const userEntry = profiles[activeHandle] || profiles.hong;
   const rawLinks = userEntry?.links;
+  const currentTheme = userEntry?.theme?.presetId || "toss";
 
-  // 로그인 상태에 따른 프로필 데이터 동적 구성 (로그인 유저 정보 화면 반영)
+  // 테마 변경 핸들러
+  const handleSelectTheme = (themeId: ProfileTheme["presetId"]) => {
+    updateTheme(activeHandle, { presetId: themeId });
+    toast.success("테마가 변경되었습니다.");
+  };
+
+  // 내 페이지 링크 복사 핸들러
+  const handleCopyPageLink = () => {
+    if (typeof window !== "undefined") {
+      const url = window.location.origin;
+      navigator.clipboard.writeText(url).then(
+        () => {
+          toast.success("내 페이지 링크를 클립보드에 복사했어요!");
+        },
+        () => {
+          toast.error("링크 복사에 실패했습니다.");
+        }
+      );
+    }
+  };
+
+  // 내 페이지 미리보기 핸들러
+  const handlePreviewPage = () => {
+    if (typeof window !== "undefined") {
+      window.open(window.location.origin, "_blank");
+      toast("내 페이지를 새 탭에서 열었습니다.");
+    }
+  };
+
+  // 로그인 상태에 따른 프로필 데이터 동적 구성 (displayName에는 이메일 앞부분 반영)
   const profile: UserProfile = useMemo(() => {
     const baseProfile = userEntry?.profile || {
       handle: "user",
@@ -174,20 +213,20 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
     };
 
     if (currentUser) {
-      const displayName =
-        currentUser.displayName || currentUser.email?.split("@")[0] || baseProfile.displayName;
+      // displayName에는 이메일 앞부분이 들어가야 함
+      const emailPrefix = currentUser.email ? currentUser.email.split("@")[0] : "사용자";
       const email = currentUser.email || baseProfile.email;
       const avatarUrl = currentUser.photoURL || baseProfile.avatarUrl;
-      const handle = currentUser.email ? currentUser.email.split("@")[0] : baseProfile.handle;
+      const handle = emailPrefix;
 
       return {
         ...baseProfile,
-        displayName,
+        displayName: emailPrefix,
         email,
         avatarUrl,
         handle,
         role: "마이링크 멤버",
-        bio: `${displayName}님의 개인 맞춤형 마이링크 공간이에요.`,
+        bio: `${emailPrefix}님의 개인 맞춤형 마이링크 공간이에요.`,
       };
     }
 
@@ -199,14 +238,6 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
     if (!currentUser || isLinksLoading) return [];
     return rawLinks || [];
   }, [rawLinks, isLinksLoading, currentUser]);
-
-  // 토스트 메시지 표시
-  const showToast = (message: string) => {
-    setToastMessage(message);
-    setTimeout(() => {
-      setToastMessage(null);
-    }, 2400);
-  };
 
   // 활성화된 링크 목록 필터링 및 정렬
   const activeLinks = useMemo(() => {
@@ -264,30 +295,39 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
     }
   };
 
-  return (
-    <div className="min-h-screen bg-[#F2F4F6] text-[#191F28] pb-16 selection:bg-[#3182F6] selection:text-white antialiased">
-      {/* 1. TDS Toast 메시지 (상단 중앙 플로팅) */}
-      {toastMessage && (
-        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 transition-all duration-200">
-          <div className="bg-[#191F28] text-white text-[15px] font-medium px-5 py-3 rounded-[14px] tds-shadow-toast flex items-center gap-2.5 shadow-lg">
-            <span className="w-5 h-5 rounded-full bg-[#059669] flex items-center justify-center shrink-0">
-              <IconCheck className="w-3.5 h-3.5 text-white" />
-            </span>
-            <span>{toastMessage}</span>
-          </div>
-        </div>
-      )}
+  // 선택된 테마에 따른 배경 스타일
+  const themeBgClass = useMemo(() => {
+    switch (currentTheme) {
+      case "minimal":
+        return "bg-[#FAFAFA]";
+      case "dark":
+        return "bg-[#11161F]";
+      case "vivid":
+        return "bg-[#EDF5FF]";
+      case "toss":
+      default:
+        return "bg-[#F2F4F6]";
+    }
+  }, [currentTheme]);
 
-      {/* 2. [A] 상단 액션 바 (구글 로그인/로그아웃 및 링크 추가) */}
+  return (
+    <div
+      className={`min-h-screen ${themeBgClass} text-[#191F28] pb-16 selection:bg-[#3182F6] selection:text-white antialiased transition-colors duration-200`}
+    >
+      {/* 1. [A] 상단 액션 바 (Base UI 메뉴 드롭다운 + 구글 소셜 로그인/로그아웃) */}
       <ProfileActions
         user={currentUser}
         isAuthLoading={isAuthLoading}
         onLogin={handleGoogleLogin}
         onLogout={handleLogout}
         onOpenAddLink={() => setIsAddLinkModalOpen(true)}
+        currentTheme={currentTheme}
+        onSelectTheme={handleSelectTheme}
+        onCopyPageLink={handleCopyPageLink}
+        onPreviewPage={handlePreviewPage}
       />
 
-      {/* 3. 메인 콘텐츠 뷰포트 (최대 576px 모바일 최적화 규격) */}
+      {/* 2. 메인 콘텐츠 뷰포트 (최대 576px 모바일 최적화 규격) */}
       <main className="max-w-xl mx-auto px-4 sm:px-5 pt-4 space-y-4">
         {/* [B] 프로필 히어로 카드 (로그인 유저 정보 반영) */}
         <ProfileHeader profile={profile} />
@@ -364,7 +404,7 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
         </footer>
       </main>
 
-      {/* 4. 새 링크 추가 모달 다이얼로그 (shadcn Dialog 기반) */}
+      {/* 3. 새 링크 추가 모달 다이얼로그 (shadcn Dialog 기반) */}
       <AddLinkDialog
         open={isAddLinkModalOpen}
         onOpenChange={setIsAddLinkModalOpen}
@@ -372,7 +412,7 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
         existingLinks={links}
       />
 
-      {/* 5. 소개 및 안내 모달 다이얼로그 (shadcn Dialog 기반) */}
+      {/* 4. 소개 및 안내 모달 다이얼로그 (shadcn Dialog 기반) */}
       <IntroDialog open={isIntroModalOpen} onOpenChange={setIsIntroModalOpen} />
     </div>
   );
