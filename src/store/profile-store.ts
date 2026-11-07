@@ -66,11 +66,11 @@ export interface ProfileStoreActions {
   getEntry: (handle?: string) => UserDatabaseEntry;
   updateProfile: (handle: string, data: Partial<UserProfile>) => void;
   updateTheme: (handle: string, theme: Partial<ProfileTheme>) => void;
-  addLink: (handle: string, input: LinkCreateInput) => Promise<LinkItem>;
-  syncFirestoreLinks: (handle?: string) => Promise<void>;
-  subscribeFirestoreLinks: (handle?: string) => Unsubscribe;
-  updateLink: (handle: string, linkId: string, input: LinkUpdateInput) => Promise<void>;
-  deleteLink: (handle: string, linkId: string) => Promise<void>;
+  addLink: (handle: string, input: LinkCreateInput, userId?: string) => Promise<LinkItem>;
+  syncFirestoreLinks: (handle?: string, userId?: string) => Promise<void>;
+  subscribeFirestoreLinks: (handle?: string, userId?: string) => Unsubscribe;
+  updateLink: (handle: string, linkId: string, input: LinkUpdateInput, userId?: string) => Promise<void>;
+  deleteLink: (handle: string, linkId: string, userId?: string) => Promise<void>;
   toggleLinkActive: (handle: string, linkId: string) => void;
   reorderLinks: (handle: string, orderedLinkIds: string[]) => void;
   trackClick: (handle: string, linkId: string) => void;
@@ -142,20 +142,21 @@ export const useProfileStore = create<ProfileStore>()(
         });
       },
 
-      addLink: async (handle: string, input: LinkCreateInput) => {
+      addLink: async (handle: string, input: LinkCreateInput, userId?: string) => {
         const key = handle.replace(/^@/, "");
         const entry = get().profiles[key] || getInitialSeedDatabase().hong;
         const displayOrder = input.displayOrder ?? entry.links.length + 1;
 
         let createdLink: LinkItem;
         try {
-          // Firestore 경로 users/anonymous/links 에 저장
+          // Firestore 경로 users/{userId}/links 에 저장
           createdLink = await addLinkToFirestore(
             {
               ...input,
               displayOrder,
             },
-            key
+            key,
+            userId || "anonymous"
           );
         } catch (error) {
           console.error("Firestore 링크 저장 실패, 로컬 폴백 생성:", error);
@@ -198,14 +199,12 @@ export const useProfileStore = create<ProfileStore>()(
         return createdLink;
       },
 
-      syncFirestoreLinks: async (handle?: string) => {
+      syncFirestoreLinks: async (handle?: string, userId?: string) => {
         const targetHandle = (handle || get().currentHandle).replace(/^@/, "");
         try {
           // createdAt desc 순으로 정렬된 링크 조회
-          const firestoreLinks = await getLinksFromFirestore();
-          // Firestore에 데이터가 없으면 로컬 상태 유지
-          if (!firestoreLinks || firestoreLinks.length === 0) return;
-
+          const firestoreLinks = await getLinksFromFirestore(userId || "anonymous");
+          // Firestore에 데이터가 없으면 빈 배열 반영하거나 유지
           set((state) => {
             const entry = state.profiles[targetHandle] || getInitialSeedDatabase().hong;
             return {
@@ -213,7 +212,6 @@ export const useProfileStore = create<ProfileStore>()(
                 ...state.profiles,
                 [targetHandle]: {
                   ...entry,
-                  // Firestore를 단일 소스로: 반환된 목록으로 교체
                   links: firestoreLinks,
                 },
               },
@@ -225,11 +223,11 @@ export const useProfileStore = create<ProfileStore>()(
       },
 
       /**
-       * Firestore (users/anonymous/links)를 실시간 구독합니다.
+       * Firestore (users/{userId}/links)를 실시간 구독합니다.
        * createdAt 내림차순으로 정렬된 링크를 받아 스토어를 교체합니다.
        * 반환된 Unsubscribe 함수를 호출해 구독을 해제하세요.
        */
-      subscribeFirestoreLinks: (handle?: string): Unsubscribe => {
+      subscribeFirestoreLinks: (handle?: string, userId?: string): Unsubscribe => {
         const targetHandle = (handle || get().currentHandle).replace(/^@/, "");
 
         return subscribeToLinksFromFirestore(
@@ -252,17 +250,18 @@ export const useProfileStore = create<ProfileStore>()(
           },
           (error) => {
             console.error("Firestore 실시간 구독 오류:", error);
-          }
+          },
+          userId || "anonymous"
         );
       },
 
-      updateLink: async (handle: string, linkId: string, input: LinkUpdateInput) => {
+      updateLink: async (handle: string, linkId: string, input: LinkUpdateInput, userId?: string) => {
         const key = handle.replace(/^@/, "");
         const now = new Date().toISOString();
 
         // 1. Firestore 업데이트
         try {
-          await updateLinkInFirestore(linkId, input);
+          await updateLinkInFirestore(linkId, input, userId || "anonymous");
         } catch (error) {
           console.error("Firestore 링크 수정 오류:", error);
         }
@@ -293,12 +292,12 @@ export const useProfileStore = create<ProfileStore>()(
         });
       },
 
-      deleteLink: async (handle: string, linkId: string) => {
+      deleteLink: async (handle: string, linkId: string, userId?: string) => {
         const key = handle.replace(/^@/, "");
 
         // 1. Firestore 삭제
         try {
-          await deleteLinkFromFirestore(linkId);
+          await deleteLinkFromFirestore(linkId, userId || "anonymous");
         } catch (error) {
           console.error("Firestore 링크 삭제 오류:", error);
         }

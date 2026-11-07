@@ -1,15 +1,25 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import {
+  onAuthStateChanged,
+  signInWithPopup,
+  GoogleAuthProvider,
+  signOut,
+  type User,
+} from "firebase/auth";
+import { auth } from "@/lib/firebase";
 import { useProfileStore } from "@/store/profile-store";
-import type { LinkItem, LinkCategory, LinkCreateInput, LinkUpdateInput } from "@/types/link";
+import type { LinkItem, LinkCategory, LinkCreateInput, LinkUpdateInput, UserProfile } from "@/types/link";
 import { ProfileActions } from "@/components/profile/profile-actions";
 import { ProfileHeader } from "@/components/profile/profile-header";
 import { CategoryFilter } from "@/components/links/category-filter";
 import { LinkList } from "@/components/links/link-list";
 import { AddLinkDialog } from "@/components/links/add-link-dialog";
 import { IntroDialog } from "@/components/profile/intro-dialog";
-import { IconCheck } from "@/components/icons";
+import { IconCheck, IconGoogle } from "@/components/icons";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
 interface ProfilePageProps {
   initialHandle?: string;
@@ -17,6 +27,10 @@ interface ProfilePageProps {
 
 export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps) {
   const normalizedInitial = initialHandle.replace(/^@/, "");
+
+  // Firebase Auth 유저 상태
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
 
   // Zustand 스토어 상태 및 액션
   const profiles = useProfileStore((s) => s.profiles);
@@ -37,10 +51,51 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
   // Firestore 조회/갱신 중 로딩 상태 (최초 로드 시 true)
   const [isLinksLoading, setIsLinksLoading] = useState(true);
 
-  // 새 링크 추가 핸들러 (Firestore 저장 → 로컬 즉시 반영 → Firestore 재조회로 목록 갱신)
+  // onAuthStateChanged 리스너 등록
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+      setIsAuthLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // 활성 엔트리 (hong 고정)
+  const activeHandle = "hong";
+
+  // Google 로그인 핸들러
+  const handleGoogleLogin = async () => {
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: "select_account" });
+      const result = await signInWithPopup(auth, provider);
+      const name = result.user.displayName || result.user.email?.split("@")[0] || "회원";
+      showToast(`${name}님 환영합니다!`);
+    } catch (error: any) {
+      console.error("Google 로그인 실패:", error);
+      if (error?.code !== "auth/popup-closed-by-user") {
+        showToast("로그인 중 오류가 발생했습니다.");
+      }
+    }
+  };
+
+  // 로그아웃 핸들러
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      showToast("로그아웃되었습니다.");
+    } catch (error) {
+      console.error("로그아웃 실패:", error);
+      showToast("로그아웃 중 오류가 발생했습니다.");
+    }
+  };
+
+  // 새 링크 추가 핸들러 (Firestore 경로: users/{user.uid}/links에 저장)
   const handleAddLink = async (input: LinkCreateInput) => {
     try {
-      const newLink = await addLink(activeHandle, input);
+      const targetUserId = currentUser ? currentUser.uid : "anonymous";
+      const newLink = await addLink(activeHandle, input, targetUserId);
       // 검색어나 카테고리 필터가 걸려 있으면 방금 추가한 링크가 안 보일 수 있으므로 초기화
       if (
         searchQuery.trim() ||
@@ -52,7 +107,7 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
       showToast(`'${newLink.title}' 링크를 추가했어요`);
       // Firestore에서 최신 목록 재조회 (createdAt 최신순 반영)
       setIsLinksLoading(true);
-      await syncFirestoreLinks(activeHandle);
+      await syncFirestoreLinks(activeHandle, targetUserId);
     } catch (error) {
       console.error("링크 추가 중 오류 발생:", error);
       showToast("링크 추가 중 오류가 발생했습니다.");
@@ -64,10 +119,11 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
   // 링크 수정 핸들러 (Firestore 업데이트 및 최신 목록 갱신)
   const handleUpdateLink = async (linkId: string, input: LinkUpdateInput) => {
     try {
-      await updateLink(activeHandle, linkId, input);
+      const targetUserId = currentUser ? currentUser.uid : "anonymous";
+      await updateLink(activeHandle, linkId, input, targetUserId);
       showToast("링크를 수정했어요");
       // Firestore에서 최신 데이터 재조회하여 갱신
-      await syncFirestoreLinks(activeHandle);
+      await syncFirestoreLinks(activeHandle, targetUserId);
     } catch (error) {
       console.error("링크 수정 중 오류 발생:", error);
       showToast("링크 수정 중 오류가 발생했습니다.");
@@ -77,37 +133,72 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
   // 링크 삭제 핸들러 (Firestore 삭제 및 최신 목록 갱신)
   const handleDeleteLink = async (linkId: string) => {
     try {
-      await deleteLink(activeHandle, linkId);
+      const targetUserId = currentUser ? currentUser.uid : "anonymous";
+      await deleteLink(activeHandle, linkId, targetUserId);
       showToast("링크를 삭제했어요");
       // Firestore에서 최신 데이터 재조회하여 갱신
-      await syncFirestoreLinks(activeHandle);
+      await syncFirestoreLinks(activeHandle, targetUserId);
     } catch (error) {
       console.error("링크 삭제 중 오류 발생:", error);
       showToast("링크 삭제 중 오류가 발생했습니다.");
     }
   };
 
-  // 활성 엔트리 (hong 고정)
-  const activeHandle = "hong";
-
-  // 마운트 또는 핸들 변경 시 뷰 카운트 1 증가 및 Firestore 링크 조회
+  // 유저 또는 마운트 시 Firestore 링크 동기화
   useEffect(() => {
     trackView(activeHandle);
+    if (isAuthLoading) return;
+
+    if (!currentUser) {
+      setIsLinksLoading(false);
+      return;
+    }
+
     setIsLinksLoading(true);
-    // users/anonymous/links 에서 createdAt 최신순으로 조회
-    syncFirestoreLinks(activeHandle).finally(() => {
+    // 로그인된 유저 uid 기준으로 users/{user.uid}/links 조회
+    syncFirestoreLinks(activeHandle, currentUser.uid).finally(() => {
       setIsLinksLoading(false);
     });
-  }, [activeHandle, trackView, syncFirestoreLinks]);
+  }, [currentUser, isAuthLoading, activeHandle, trackView, syncFirestoreLinks]);
 
   const userEntry = profiles[activeHandle] || profiles.hong;
-  const profile = userEntry?.profile;
   const rawLinks = userEntry?.links;
-  // 로딩 중일 때는 빈 배열을 전달하여 이전 데이터가 화면에 깜빡이며 노출되지 않도록 방지
+
+  // 로그인 상태에 따른 프로필 데이터 동적 구성 (로그인 유저 정보 화면 반영)
+  const profile: UserProfile = useMemo(() => {
+    const baseProfile = userEntry?.profile || {
+      handle: "user",
+      displayName: "사용자",
+      bio: "마이링크에 오신 것을 환영해요.",
+      viewsCount: 0,
+    };
+
+    if (currentUser) {
+      const displayName =
+        currentUser.displayName || currentUser.email?.split("@")[0] || baseProfile.displayName;
+      const email = currentUser.email || baseProfile.email;
+      const avatarUrl = currentUser.photoURL || baseProfile.avatarUrl;
+      const handle = currentUser.email ? currentUser.email.split("@")[0] : baseProfile.handle;
+
+      return {
+        ...baseProfile,
+        displayName,
+        email,
+        avatarUrl,
+        handle,
+        role: "마이링크 멤버",
+        bio: `${displayName}님의 개인 맞춤형 마이링크 공간이에요.`,
+      };
+    }
+
+    return baseProfile;
+  }, [userEntry, currentUser]);
+
+  // 로딩 중이거나 미로그인 시 링크 목록 처리
   const links = useMemo(() => {
-    if (isLinksLoading) return [];
+    if (!currentUser || isLinksLoading) return [];
     return rawLinks || [];
-  }, [rawLinks, isLinksLoading]);
+  }, [rawLinks, isLinksLoading, currentUser]);
 
   // 토스트 메시지 표시
   const showToast = (message: string) => {
@@ -118,7 +209,6 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
   };
 
   // 활성화된 링크 목록 필터링 및 정렬
-  // Firestore 구독이 createdAt desc 순으로 반환하므로 배열 순서를 유지하고, isPinned만 최상단으로 올림
   const activeLinks = useMemo(() => {
     return links
       .filter((link) => link.isActive)
@@ -188,46 +278,82 @@ export default function ProfilePage({ initialHandle = "hong" }: ProfilePageProps
         </div>
       )}
 
-      {/* 2. [A] 상단 액션 바 (새 링크 추가 버튼) */}
+      {/* 2. [A] 상단 액션 바 (구글 로그인/로그아웃 및 링크 추가) */}
       <ProfileActions
+        user={currentUser}
+        isAuthLoading={isAuthLoading}
+        onLogin={handleGoogleLogin}
+        onLogout={handleLogout}
         onOpenAddLink={() => setIsAddLinkModalOpen(true)}
       />
 
       {/* 3. 메인 콘텐츠 뷰포트 (최대 576px 모바일 최적화 규격) */}
       <main className="max-w-xl mx-auto px-4 sm:px-5 pt-4 space-y-4">
-        {/* [B] 프로필 히어로 카드 */}
+        {/* [B] 프로필 히어로 카드 (로그인 유저 정보 반영) */}
         <ProfileHeader profile={profile} />
 
-        {/* [C] 링크 & 채널 검색 및 카테고리 필터 바 */}
-        <CategoryFilter
-          totalCount={activeLinks.length}
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          selectedCategory={selectedCategory}
-          onSelectCategory={setSelectedCategory}
-          availableCategories={availableCategories}
-          categoryCounts={categoryCounts}
-          onResetFilters={() => {
-            setSearchQuery("");
-            setSelectedCategory("all");
-          }}
-          onOpenAddLink={() => setIsAddLinkModalOpen(true)}
-        />
+        {/* 미로그인 상태 안내 배너 */}
+        {!isAuthLoading && !currentUser ? (
+          <Card className="rounded-[24px] border-[#E5E8EB] bg-white text-center shadow-xs">
+            <CardContent className="p-8 sm:p-10 space-y-4">
+              <div className="w-14 h-14 rounded-full bg-[#E8F3FF] text-[#3182F6] mx-auto flex items-center justify-center shadow-2xs">
+                <IconGoogle className="w-7 h-7" />
+              </div>
+              <div className="space-y-1.5">
+                <h2 className="text-[18px] sm:text-[20px] font-bold text-[#191F28]">
+                  로그인 후 나만의 링크를 관리해 보세요
+                </h2>
+                <p className="text-[14px] sm:text-[15px] text-[#6B7684] leading-relaxed max-w-sm mx-auto">
+                  Google 계정으로 로그인하면 내 계정 전용 링크를 안전하게 저장하고 언제 어디서나 관리할 수 있어요.
+                </p>
+              </div>
+              <div className="pt-2">
+                <Button
+                  variant="primary"
+                  size="lg"
+                  onClick={handleGoogleLogin}
+                  className="w-full sm:w-auto px-6 py-3 rounded-full text-[15px] font-bold gap-2 cursor-pointer shadow-sm hover:scale-[1.01] transition-transform"
+                >
+                  <IconGoogle className="w-4 h-4 text-white" />
+                  <span>Google로 로그인하고 시작하기</span>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            {/* [C] 링크 & 채널 검색 및 카테고리 필터 바 */}
+            <CategoryFilter
+              totalCount={activeLinks.length}
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              selectedCategory={selectedCategory}
+              onSelectCategory={setSelectedCategory}
+              availableCategories={availableCategories}
+              categoryCounts={categoryCounts}
+              onResetFilters={() => {
+                setSearchQuery("");
+                setSelectedCategory("all");
+              }}
+              onOpenAddLink={() => setIsAddLinkModalOpen(true)}
+            />
 
-        {/* [D] 링크 카드 리스트 스택 */}
-        <LinkList
-          links={filteredLinks}
-          allLinks={links}
-          isLoading={isLinksLoading}
-          onLinkClick={handleLinkClick}
-          onResetFilters={() => {
-            setSearchQuery("");
-            setSelectedCategory("all");
-          }}
-          onOpenAddLink={() => setIsAddLinkModalOpen(true)}
-          onUpdateLink={handleUpdateLink}
-          onDeleteLink={handleDeleteLink}
-        />
+            {/* [D] 링크 카드 리스트 스택 */}
+            <LinkList
+              links={filteredLinks}
+              allLinks={links}
+              isLoading={isLinksLoading}
+              onLinkClick={handleLinkClick}
+              onResetFilters={() => {
+                setSearchQuery("");
+                setSelectedCategory("all");
+              }}
+              onOpenAddLink={() => setIsAddLinkModalOpen(true)}
+              onUpdateLink={handleUpdateLink}
+              onDeleteLink={handleDeleteLink}
+            />
+          </>
+        )}
 
         {/* [E] 하단 푸터 (깔끔한 저작권 정보) */}
         <footer className="pt-8 pb-6 text-center">

@@ -16,22 +16,29 @@ import type { LinkItem, LinkCreateInput, LinkUpdateInput } from "@/types/link";
 
 /**
  * Firestore 저장 경로 상수
- * users/anonymous/links
+ * users/{userId}/links
  */
 export const FIRESTORE_USERS_COLLECTION = "users";
 export const FIRESTORE_ANONYMOUS_DOC = "anonymous";
 export const FIRESTORE_LINKS_COLLECTION = "links";
 
 /**
- * users/anonymous/links 컬렉션 레퍼런스 반환
+ * users/{userId}/links 컬렉션 레퍼런스 반환 (userId 생략 시 anonymous)
  */
-export function getAnonymousLinksCollectionRef() {
+export function getUserLinksCollectionRef(userId: string = FIRESTORE_ANONYMOUS_DOC) {
   return collection(
     db,
     FIRESTORE_USERS_COLLECTION,
-    FIRESTORE_ANONYMOUS_DOC,
+    userId || FIRESTORE_ANONYMOUS_DOC,
     FIRESTORE_LINKS_COLLECTION
   );
+}
+
+/**
+ * 레거시 호환용 users/anonymous/links 컬렉션 레퍼런스 반환
+ */
+export function getAnonymousLinksCollectionRef() {
+  return getUserLinksCollectionRef(FIRESTORE_ANONYMOUS_DOC);
 }
 
 /**
@@ -49,17 +56,19 @@ export function sanitizeForFirestore<T extends Record<string, any>>(obj: T): Rec
 }
 
 /**
- * Firestore (경로: users/anonymous/links)에 신규 링크 저장
+ * Firestore (경로: users/{userId}/links)에 신규 링크 저장
  *
  * @param input 링크 생성 입력 데이터
  * @param handle 유저 핸들 (기본값: "hong")
+ * @param userId Firebase Auth UID (기본값: "anonymous")
  * @returns 생성된 LinkItem
  */
 export async function addLinkToFirestore(
   input: LinkCreateInput,
-  handle: string = "hong"
+  handle: string = "hong",
+  userId: string = FIRESTORE_ANONYMOUS_DOC
 ): Promise<LinkItem> {
-  const collectionRef = getAnonymousLinksCollectionRef();
+  const collectionRef = getUserLinksCollectionRef(userId);
   // Firestore 자동 ID를 가진 문서 레퍼런스 생성
   const newDocRef = doc(collectionRef);
   const newId = newDocRef.id;
@@ -90,26 +99,28 @@ export async function addLinkToFirestore(
     _serverCreatedAt: serverTimestamp(),
   });
 
-  // users/anonymous/links/{newId} 문서 저장
+  // users/{userId}/links/{newId} 문서 저장
   await setDoc(newDocRef, firestoreData);
 
   return newLink;
 }
 
 /**
- * Firestore (경로: users/anonymous/links/{linkId}) 링크 수정
+ * Firestore (경로: users/{userId}/links/{linkId}) 링크 수정
  *
  * @param linkId 수정할 링크 ID
  * @param input 링크 수정 입력 데이터
+ * @param userId Firebase Auth UID (기본값: "anonymous")
  */
 export async function updateLinkInFirestore(
   linkId: string,
-  input: LinkUpdateInput
+  input: LinkUpdateInput,
+  userId: string = FIRESTORE_ANONYMOUS_DOC
 ): Promise<void> {
   const docRef = doc(
     db,
     FIRESTORE_USERS_COLLECTION,
-    FIRESTORE_ANONYMOUS_DOC,
+    userId || FIRESTORE_ANONYMOUS_DOC,
     FIRESTORE_LINKS_COLLECTION,
     linkId
   );
@@ -126,15 +137,19 @@ export async function updateLinkInFirestore(
 }
 
 /**
- * Firestore (경로: users/anonymous/links/{linkId}) 링크 삭제
+ * Firestore (경로: users/{userId}/links/{linkId}) 링크 삭제
  *
  * @param linkId 삭제할 링크 ID
+ * @param userId Firebase Auth UID (기본값: "anonymous")
  */
-export async function deleteLinkFromFirestore(linkId: string): Promise<void> {
+export async function deleteLinkFromFirestore(
+  linkId: string,
+  userId: string = FIRESTORE_ANONYMOUS_DOC
+): Promise<void> {
   const docRef = doc(
     db,
     FIRESTORE_USERS_COLLECTION,
-    FIRESTORE_ANONYMOUS_DOC,
+    userId || FIRESTORE_ANONYMOUS_DOC,
     FIRESTORE_LINKS_COLLECTION,
     linkId
   );
@@ -143,11 +158,15 @@ export async function deleteLinkFromFirestore(linkId: string): Promise<void> {
 }
 
 /**
- * Firestore (경로: users/anonymous/links)에서 모든 링크 목록 조회
+ * Firestore (경로: users/{userId}/links)에서 모든 링크 목록 조회
+ *
+ * @param userId Firebase Auth UID (기본값: "anonymous")
  */
-export async function getLinksFromFirestore(): Promise<LinkItem[]> {
+export async function getLinksFromFirestore(
+  userId: string = FIRESTORE_ANONYMOUS_DOC
+): Promise<LinkItem[]> {
   try {
-    const collectionRef = getAnonymousLinksCollectionRef();
+    const collectionRef = getUserLinksCollectionRef(userId);
     const q = query(collectionRef, orderBy("createdAt", "desc"));
     const snapshot = await getDocs(q);
 
@@ -182,13 +201,18 @@ export async function getLinksFromFirestore(): Promise<LinkItem[]> {
 }
 
 /**
- * Firestore (경로: users/anonymous/links) 실시간 링크 목록 구독
+ * Firestore (경로: users/{userId}/links) 실시간 링크 목록 구독
+ *
+ * @param onUpdate 링크 목록 갱신 콜백
+ * @param onError 에러 콜백
+ * @param userId Firebase Auth UID (기본값: "anonymous")
  */
 export function subscribeToLinksFromFirestore(
   onUpdate: (links: LinkItem[]) => void,
-  onError?: (error: Error) => void
+  onError?: (error: Error) => void,
+  userId: string = FIRESTORE_ANONYMOUS_DOC
 ): Unsubscribe {
-  const collectionRef = getAnonymousLinksCollectionRef();
+  const collectionRef = getUserLinksCollectionRef(userId);
   const q = query(collectionRef, orderBy("createdAt", "desc"));
 
   return onSnapshot(
