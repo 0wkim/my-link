@@ -4,23 +4,38 @@ import React from "react";
 import type { UserProfile } from "@/types/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarImage, AvatarFallback, AvatarBadge } from "@/components/ui/avatar";
-import { IconVerified } from "@/components/icons";
+import { Button } from "@/components/ui/button";
+import { IconVerified, IconEdit } from "@/components/icons";
 
 interface ProfileHeaderProps {
   profile?: UserProfile;
   onCopyEmail?: () => void;
+  onEditProfile?: () => void;
 }
 
-export function ProfileHeader({ profile }: ProfileHeaderProps) {
+export function ProfileHeader({ profile, onEditProfile }: ProfileHeaderProps) {
   if (!profile) return null;
 
   return (
     <Card className="rounded-[24px] border-[#E5E8EB]">
       <CardContent className="p-6 sm:p-7">
-        {/* 가용 상태 뱃지 (TDS Pill) */}
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#E8F3FF] text-[#3182F6] text-[13px] font-semibold mb-5">
-          <span className="w-2 h-2 rounded-full bg-[#3182F6] animate-pulse" />
-          <span>새로운 협업 및 프로젝트를 환영해요</span>
+        {/* 상단 뱃지 및 프로필 수정 버튼 */}
+        <div className="flex items-center justify-between gap-2 mb-5">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#E8F3FF] text-[#3182F6] text-[13px] font-semibold">
+            <span className="w-2 h-2 rounded-full bg-[#3182F6] animate-pulse" />
+            <span>새로운 협업 및 프로젝트를 환영해요</span>
+          </div>
+          {onEditProfile && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onEditProfile}
+              className="h-7 px-2.5 rounded-full text-[12px] font-semibold text-[#4E5968] border-[#D1D6DB] hover:bg-[#F2F4F6] gap-1 cursor-pointer shrink-0 shadow-2xs"
+            >
+              <IconEdit className="w-3.5 h-3.5 text-[#6B7684]" />
+              <span>프로필 수정</span>
+            </Button>
+          )}
         </div>
 
         {/* 프로필 이미지 & 기본 정보 */}

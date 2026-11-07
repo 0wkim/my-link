@@ -87,6 +87,7 @@ export interface LinkUpdateInput extends Partial<LinkCreateInput> {
 
 export interface UserProfile {
   handle: string;
+  username?: string;
   displayName: string;
   bio: string;
   avatarUrl: string;
@@ -101,6 +102,18 @@ export interface UserProfile {
     linkedin?: string;
     youtube?: string;
   };
+}
+
+export interface UserProfileData {
+  uid: string;
+  username: string;
+  displayName: string;
+  bio: string;
+  email?: string;
+  avatarUrl?: string;
+  role?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface ProfileTheme {
