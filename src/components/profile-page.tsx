@@ -71,9 +71,8 @@ export default function ProfilePage({ initialHandle }: ProfilePageProps) {
   const updateLinkMutation = useUpdateLinkMutation(currentUser?.uid);
   const deleteLinkMutation = useDeleteLinkMutation(currentUser?.uid);
 
-  // Zustand 스토어 테마 및 통계 액션
+  // Zustand 스토어 테마 및 조회 수 액션
   const updateTheme = useProfileStore((s) => s.updateTheme);
-  const trackClick = useProfileStore((s) => s.trackClick);
   const trackView = useProfileStore((s) => s.trackView);
 
   // 로컬 상태
@@ -311,9 +310,6 @@ export default function ProfilePage({ initialHandle }: ProfilePageProps) {
   // 링크 클릭 핸들러 (새 탭 열기)
   const handleLinkClick = (link: LinkItem, e: React.MouseEvent) => {
     e.preventDefault();
-    if (currentUser?.uid) {
-      trackClick(currentUser.uid, link.id);
-    }
     if (typeof window !== "undefined") {
       window.open(link.url, "_blank", "noopener,noreferrer");
     }

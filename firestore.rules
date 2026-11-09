@@ -60,7 +60,15 @@ service cloud.firestore {
       // - 쓰기: 로그인 필수, 로그인한 userId가 경로의 userId와 같아야 함 (본인 링크만 등록/수정/삭제)
       match /links/{linkId} {
         allow read: if true;
-        allow create, update: if isOwner(userId) && isValidLinkData();
+        allow create: if isOwner(userId) && isValidLinkData();
+        // 공개 프로필 방문자는 클릭 수와 서버 기록 시각만 한 번에 1씩 늘릴 수 있습니다.
+        // 그 외 링크 내용 변경은 소유자에게만 허용합니다.
+        allow update: if (isOwner(userId) && isValidLinkData()) ||
+          (
+            request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['clickCount', '_serverUpdatedAt']) &&
+            request.resource.data.clickCount == resource.data.clickCount + 1
+          );
         allow delete: if isOwner(userId);
       }
     }

@@ -1,8 +1,11 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { onAuthStateChanged, type User } from "firebase/auth";
 import type { UserProfileData, LinkItem, LinkCategory } from "@/types/link";
+import { auth } from "@/lib/firebase";
+import { incrementLinkClickCount } from "@/lib/firestore-links";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarImage, AvatarFallback, AvatarBadge } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -20,16 +23,26 @@ interface PublicProfileViewProps {
 
 export function PublicProfileView({ profile, links }: PublicProfileViewProps) {
   const [selectedCategory, setSelectedCategory] = useState<LinkCategory | "all">("all");
+  const [profileLinks, setProfileLinks] = useState(links);
+  const [authUser, setAuthUser] = useState<User | null>(null);
+  const [isAuthResolved, setIsAuthResolved] = useState(false);
+
+  useEffect(() => {
+    return onAuthStateChanged(auth, (user) => {
+      setAuthUser(user);
+      setIsAuthResolved(true);
+    });
+  }, []);
 
   // 활성화된 링크 필터링 및 고정/최신순 정렬
   const activeLinks = useMemo(() => {
-    return links
+    return profileLinks
       .filter((link) => link.isActive)
       .sort((a, b) => {
         if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
-  }, [links]);
+  }, [profileLinks]);
 
   // 카테고리 필터링
   const filteredLinks = useMemo(() => {
@@ -45,10 +58,28 @@ export function PublicProfileView({ profile, links }: PublicProfileViewProps) {
     return Array.from(cats);
   }, [activeLinks]);
 
-  const handleLinkClick = (url: string) => {
-    if (typeof window !== "undefined") {
-      window.open(url, "_blank", "noopener,noreferrer");
-    }
+  const handleLinkClick = (link: LinkItem) => {
+    // 로그인 상태 확인 전 또는 링크 제작자 본인의 클릭은 집계하지 않습니다.
+    if (!isAuthResolved || authUser?.uid === profile.uid) return;
+
+    setProfileLinks((currentLinks) =>
+      currentLinks.map((currentLink) =>
+        currentLink.id === link.id
+          ? { ...currentLink, clickCount: currentLink.clickCount + 1 }
+          : currentLink
+      )
+    );
+
+    void incrementLinkClickCount(link.id, profile.uid).catch((error) => {
+      console.warn("링크 클릭 수 저장에 실패했습니다.", error);
+      setProfileLinks((currentLinks) =>
+        currentLinks.map((currentLink) =>
+          currentLink.id === link.id
+            ? { ...currentLink, clickCount: Math.max(0, currentLink.clickCount - 1) }
+            : currentLink
+        )
+      );
+    });
   };
 
   return (
@@ -162,9 +193,12 @@ export function PublicProfileView({ profile, links }: PublicProfileViewProps) {
             </Card>
           ) : (
             filteredLinks.map((link) => (
-              <div
+              <a
                 key={link.id}
-                onClick={() => handleLinkClick(link.url)}
+                href={link.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => handleLinkClick(link)}
                 className="group relative flex items-center justify-between p-4 sm:p-4.5 bg-white rounded-[20px] border border-[#E5E8EB] hover:border-[#3182F6] hover:shadow-md transition-all cursor-pointer"
               >
                 <div className="flex items-center gap-3.5 min-w-0 flex-1 mr-3">
@@ -216,7 +250,7 @@ export function PublicProfileView({ profile, links }: PublicProfileViewProps) {
                 <div className="w-8 h-8 rounded-full bg-[#F2F4F6] group-hover:bg-[#E8F3FF] flex items-center justify-center shrink-0 transition-colors">
                   <IconExternalLink className="w-4 h-4 text-[#8B95A1] group-hover:text-[#3182F6] transition-colors" />
                 </div>
-              </div>
+              </a>
             ))
           )}
         </div>

@@ -166,7 +166,7 @@ export function LinkCard({
                 </span>
                 <span className="inline-flex items-center gap-1">
                   <IconCursorClick className="w-3.5 h-3.5 text-[#8B95A1]" />
-                  {(link.clickCount || 0).toLocaleString()}회 클릭
+                  {(link.clickCount ?? 0).toLocaleString()}
                 </span>
                 {formattedUpdatedAt && (
                   <span className="inline-flex items-center gap-1 text-[11px] text-[#8B95A1]">

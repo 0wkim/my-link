@@ -8,6 +8,7 @@ import {
   query,
   orderBy,
   onSnapshot,
+  increment,
   serverTimestamp,
   type Unsubscribe,
 } from "firebase/firestore";
@@ -134,6 +135,28 @@ export async function updateLinkInFirestore(
 
   const sanitized = sanitizeForFirestore(updateData);
   await updateDoc(docRef, sanitized);
+}
+
+/**
+ * 공개 프로필 방문자가 링크를 열었을 때 누적 클릭 수를 원자적으로 증가시킵니다.
+ * 인증 여부와 관계없이 Firestore 보안 규칙이 clickCount 필드의 +1 변경만 허용합니다.
+ */
+export async function incrementLinkClickCount(
+  linkId: string,
+  userId: string
+): Promise<void> {
+  const docRef = doc(
+    db,
+    FIRESTORE_USERS_COLLECTION,
+    userId,
+    FIRESTORE_LINKS_COLLECTION,
+    linkId
+  );
+
+  await updateDoc(docRef, {
+    clickCount: increment(1),
+    _serverUpdatedAt: serverTimestamp(),
+  });
 }
 
 /**
