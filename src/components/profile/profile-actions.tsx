@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import type { User } from "firebase/auth";
 import { Menu } from "@base-ui/react/menu";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,7 @@ import {
   IconCheck,
   IconEdit,
   IconGlobe,
+  IconCursorClick,
 } from "@/components/icons";
 import type { ProfileTheme, UserProfileData } from "@/types/link";
 
@@ -32,6 +34,7 @@ interface ProfileActionsProps {
   onSelectTheme?: (theme: ProfileTheme["presetId"]) => void;
   onCopyPageLink?: () => void;
   onPreviewPage?: () => void;
+  onGoToStats?: () => void;
 }
 
 const THEME_OPTIONS: Array<{ id: ProfileTheme["presetId"]; name: string; color: string }> = [
@@ -54,6 +57,7 @@ export function ProfileActions({
   onSelectTheme,
   onCopyPageLink,
   onPreviewPage,
+  onGoToStats,
 }: ProfileActionsProps) {
   // displayName은 프로필의 displayName 또는 이메일 앞부분 적용
   const userPrefix =
@@ -67,7 +71,7 @@ export function ProfileActions({
       <div className="max-w-xl mx-auto px-3.5 sm:px-5 h-14 flex items-center justify-between gap-2 sm:gap-4">
         {/* 서비스 엠블럼 및 개인별 페이지 이동 뱃지 */}
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-          <a
+          <Link
             href="/"
             className="flex items-center gap-1.5 sm:gap-2 cursor-pointer transition-opacity hover:opacity-80"
           >
@@ -77,7 +81,7 @@ export function ProfileActions({
             <span className="text-[15px] sm:text-[17px] font-extrabold text-[#191F28] tracking-tight">
               MYLINK
             </span>
-          </a>
+          </Link>
           <Badge
             variant="brand"
             size="sm"
@@ -136,6 +140,17 @@ export function ProfileActions({
                       )}
 
                       {/* 2. 프로필 수정 */}
+                      {onGoToStats && (
+                        <Menu.Item
+                          onClick={onGoToStats}
+                          className="flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium text-[#333D4B] hover:text-[#191F28] hover:bg-[#F2F4F6] rounded-xl cursor-pointer outline-none transition-colors"
+                        >
+                          <IconCursorClick className="w-4 h-4 text-[#6B7684]" />
+                          <span>통계</span>
+                        </Menu.Item>
+                      )}
+
+                      {/* 3. 프로필 수정 */}
                       {onOpenEditProfile && (
                         <Menu.Item
                           onClick={onOpenEditProfile}
@@ -146,25 +161,29 @@ export function ProfileActions({
                         </Menu.Item>
                       )}
 
-                      {/* 3. 내 페이지 미리보기 */}
-                      <Menu.Item
-                        onClick={onPreviewPage}
-                        className="flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium text-[#333D4B] hover:text-[#191F28] hover:bg-[#F2F4F6] rounded-xl cursor-pointer outline-none transition-colors"
-                      >
-                        <IconExternalLink className="w-4 h-4 text-[#6B7684]" />
-                        <span>내 페이지 미리보기</span>
-                      </Menu.Item>
+                      {/* 4. 내 페이지 미리보기 */}
+                      {onPreviewPage && (
+                        <Menu.Item
+                          onClick={onPreviewPage}
+                          className="flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium text-[#333D4B] hover:text-[#191F28] hover:bg-[#F2F4F6] rounded-xl cursor-pointer outline-none transition-colors"
+                        >
+                          <IconExternalLink className="w-4 h-4 text-[#6B7684]" />
+                          <span>내 페이지 미리보기</span>
+                        </Menu.Item>
+                      )}
 
-                      {/* 4. 내 페이지 링크 복사 */}
-                      <Menu.Item
-                        onClick={onCopyPageLink}
-                        className="flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium text-[#333D4B] hover:text-[#191F28] hover:bg-[#F2F4F6] rounded-xl cursor-pointer outline-none transition-colors"
-                      >
-                        <IconCopy className="w-4 h-4 text-[#6B7684]" />
-                        <span>내 페이지 링크 복사</span>
-                      </Menu.Item>
+                      {/* 5. 내 페이지 링크 복사 */}
+                      {onCopyPageLink && (
+                        <Menu.Item
+                          onClick={onCopyPageLink}
+                          className="flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium text-[#333D4B] hover:text-[#191F28] hover:bg-[#F2F4F6] rounded-xl cursor-pointer outline-none transition-colors"
+                        >
+                          <IconCopy className="w-4 h-4 text-[#6B7684]" />
+                          <span>내 페이지 링크 복사</span>
+                        </Menu.Item>
+                      )}
 
-                      {/* 5. 테마 변경 서브 섹션 */}
+                      {/* 6. 테마 변경 서브 섹션 */}
                       <div className="my-1 border-t border-[#F2F4F6] pt-1">
                         <button
                           type="button"
@@ -214,7 +233,7 @@ export function ProfileActions({
 
                       <div className="my-1 border-t border-[#F2F4F6]" />
 
-                      {/* 6. 로그아웃 */}
+                      {/* 7. 로그아웃 */}
                       <Menu.Item
                         onClick={onLogout}
                         className="flex items-center gap-2.5 px-3 py-2 text-[13px] font-semibold text-[#E93D82] hover:bg-[#FEEBF0] rounded-xl cursor-pointer outline-none transition-colors"

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import {
   onAuthStateChanged,
   signInWithPopup,
@@ -43,6 +44,7 @@ interface ProfilePageProps {
 }
 
 export default function ProfilePage({ initialHandle }: ProfilePageProps) {
+  const router = useRouter();
   // isMounted: SSR/CSR hydration 불일치 방지 (서버·클라이언트 초기 렌더 모두 로딩 스피너)
   const [isMounted, setIsMounted] = useState(false);
 
@@ -234,6 +236,10 @@ export default function ProfilePage({ initialHandle }: ProfilePageProps) {
     }
   };
 
+  const handleGoToStats = () => {
+    router.push("/stats");
+  };
+
   // 로그인 상태 및 TanStack Query userProfile에 따른 프로필 데이터 구성 (홍길동 목데이터 폴백 없음)
   const profile: UserProfile | null = useMemo(() => {
     if (!currentUser) return null;
@@ -361,6 +367,7 @@ export default function ProfilePage({ initialHandle }: ProfilePageProps) {
         onSelectTheme={handleSelectTheme}
         onCopyPageLink={handleCopyPageLink}
         onPreviewPage={handlePreviewPage}
+        onGoToStats={handleGoToStats}
       />
 
       {/* 2. 메인 콘텐츠 뷰포트 (최대 576px 모바일 규격) */}
